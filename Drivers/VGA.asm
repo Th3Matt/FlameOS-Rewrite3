@@ -1,6 +1,6 @@
 [ BITS 32 ]
 
-Init:	; NAME='Init_VGA_'
+InitVGAH:	; NAME='Init_VGA_'
 	mov dx, 0x3DA
 	in al, dx
 
@@ -68,7 +68,7 @@ Init:	; NAME='Init_VGA_'
 
 		dec dx
 
-		and al, 00010000b 	; 
+		and al, 00010000b 	;
 		or al, 00000001b
 		push ax
 		mov al, 0x30
@@ -362,5 +362,48 @@ Init:	; NAME='Init_VGA_'
 		in al, dx
 		and al, 11011111b
 		out dx, al
+
+	iret
+
+InitBGA:
+	mov ax, 0x4
+	mov dx, 0x01CE
+	out dx, ax ;0x1CE
+
+	xor ax, ax		; Screen disable
+	inc dx
+	out dx, ax ;0x1CF
+
+	mov ax, 0x1
+	dec dx
+	out dx, ax ;0x1CE
+
+	mov ax, 720		; X
+	inc dx
+	out dx, ax ;0x1CF
+
+	mov ax, 0x2
+	dec dx
+	out dx, ax ;0x1CE
+
+	mov ax, 400		;	Y
+	inc dx
+	out dx, ax ;0x1CF
+
+	mov ax, 0x3
+	dec dx
+	out dx, ax ;0x1CE
+
+	mov ax, 32		; BPP
+	inc dx
+	out dx, ax ;0x1CF
+
+	mov ax, 0x4
+	dec dx
+	out dx, ax ;0x1CE
+
+	mov ax, 0x41	; Linear famebuffer and screen enable
+	inc dx
+	out dx, ax ;0x1CF
 
 	iret
