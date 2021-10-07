@@ -23,28 +23,33 @@ KernelInit16:
 	mov ax, 0x2000
 	mov es, ax
 
-	xor bx, bx
+	xor dx, dx
 	call CheckForBGA
 	jc .noBGA
 
-	or bl, 00000010b
+	or dl, 00000100b							; BGA ID verified
+
+	call CheckBGACard
+	jc .noBGA
+
+	or dl, 00001000b							; BGA graphics card found
 	jmp SelectVideoMode
 
 	.noBGA:
-		mov dword [GraphicsFramebufferAddress], 0xA0000
 
 SelectVideoMode:
-	mov ah, 0x0F
-	mov [Vars+0], bl
-	test bl, 00000010b
-	jz .notBochs
+	.setRecomended:								; Setting video driver recommendation
+		mov ah, 0x0F
+		mov [Vars+0], dl
+		test dl, 00001000b
+		jz .notBochs
 
-	mov dword [es:si+49], ('H'<<24)+('C'<<16)+('O'<<8)+'B'
-	mov byte [es:si+53], 'S'
-	jmp .recomendedSet
+		mov dword [es:si+49], ('H'<<24)+('C'<<16)+('O'<<8)+'B'
+		mov byte [es:si+53], 'S'
+		jmp .recomendedSet
 
 	.notBochs:
-		test bl, 00000001b
+		test dl, 00000001b
 		jz .notVBE
 
 		mov dword [es:si+49], ('2'<<24)+('E'<<16)+('B'<<8)+'V'
@@ -54,87 +59,109 @@ SelectVideoMode:
 	.notVBE:
 	.recomendedSet:
 
-	call PrintLine16
+	call PrintLine16							; Video mode select message
 	inc si
-	call PrintLine16
+	call PrintLine16							; VGA hardware driver option
+	mov bx, Selection+4
 	inc si
 	mov cx, '1'
-	test bl, 00000001b
+	test dl, 00000001b
 	jz .bochs
 
 	.VBE2:
 		inc cx
-		call PrintLine16
+		call PrintLine16						; VBE 2+ driver option
+		mov dword [es:bx], "VBE2"
+		add bx, 4
 
 	.bochs:
-		test bl, 00000010b
+		test dl, 00000100b
 		jz .printEnd
 		inc cx
+		mov dword [es:bx], "BOCH"
+		add bx, 4
 
-		.bochs.fixSI:
+		.bochs.fixSI:							; Looping until next NULL character
 			cmp byte [es:si], 0
-			jz .bochs.print
+			jz .bochs.checkActive
 
 			inc si
 			jmp .bochs.fixSI
 
+		.bochs.checkActive:
+			test dl, 00001000b
+			jnz .bochs.print
+			mov ah, 0x08
+
 		.bochs.print:
 			inc si
 			mov [es:si+2], cl
-			call PrintLine16
+
+			call PrintLine16					; BGA driver option
+			mov ah, 0x0F
 			inc si
 
 		.printEnd:
+			push dx
+		.waitForInput:
 			mov ah, 1
-			int 0x16
-			jz .printEnd
+			int 0x16							; Waiting for input
+			jz .waitForInput
 
 			mov ah, 0
 			int 0x16
 
-			cmp ah, 0x1C
+			cmp ah, 0x1C 						; Check selection if Enter button pressed
 			je .testSecection
 
-			cmp al, 0x30
-			jl .printEnd
+			cmp al, 0x30						; Check if number (lower bound)
+			jl .waitForInput
 
-			cmp al, cl
-			jg .printEnd
+			cmp al, cl 							; Check if number (upper bound)
+			jg .waitForInput
 
 			mov ah, 0x0F
-			mov [gs:((80*23)+(80/2))*2], ax
-			jmp .printEnd
+			mov [gs:((80*23)+(80/2))*2], ax 	; Writing number
+			jmp .waitForInput
+
+			.testBochs:
+				xchg bx, dx
+				pop dx
+				test dl, 00001000b
+				xchg bx, dx
+				jnz .done
+
+				mov byte [gs:((80*23)+(80/2))*2+1], 0x40
+				jmp .printEnd
 
 			.testSecection:
 				mov ah, [gs:((80*23)+(80/2))*2]
 				cmp ah, 0
-				jz .printEnd
+				jz .waitForInput
 
-				cmp ah, 0x31
-				jnz .notVGAHDriver
-				mov dword [Vars+1], 'VGAH'
-				jmp .done
+				xor bx, bx
+				mov bl, ah
+				sub bl, 0x31
+				shl bx, 2
+				add bx, Selection
+				mov edx, [es:bx]
 
-				.notVGAHDriver:
-					cmp ah, 0x32
-					jnz .not2ndOption
+				cmp edx, "BOCH"
+				je .testBochs
 
-					test byte [Vars+0], 00000010b
-					jnz .2ndOption.2
-					mov dword [Vars+1], 'VBE2'
-					jmp .done
+				cmp edx, "VGAH"
+				jne .done
 
-					.2ndOption.2:
-						mov dword [Vars+1], 'BOCH'
-						jmp .done
-
-				.not2ndOption:
-					mov dword [Vars+1], 'BOCH'
+				mov dword [GraphicsFramebufferAddress], 0xA0000
 
 			.done:
 
+			mov dword [Vars+1], edx
 %include "KernelIncludes/GDT.asm"
 
+Selection: db 'VGAH'
+		   dd 0
+		   dd 0
 SelectVideoModeMsg: 	 db 'Select a video driver. Recomended video mode is: VGAH_', 0
                          db '  1. VGA Hardware Driver (VGAH_)', 0
 VideoModeSelectionVBE:	 db '  2. Video BIOS Extentions 2.0+ (VBE2+)', 0
@@ -144,6 +171,7 @@ GraphicsCardAddress equ Vars+5
 GraphicsFramebufferAddress equ Vars+9
 
 CheckForBGA:
+	push dx
 	mov dx, 0x01CE
 	xor ax, ax
 	out dx, ax
@@ -153,9 +181,20 @@ CheckForBGA:
 
 	cmp ax, 0xB0C1
 	jl .error
-	cmp ax, 0xB0C5
+	cmp ax, 0xB0C5								; Checking BGA ID
 	jg .error
 
+	pop dx
+	clc
+	ret
+
+	.error:
+		pop dx
+		stc
+		ret
+
+CheckBGACard:
+	push dx
 	mov cx, 0xFFFF
 	mov eax, 1<<31
 	mov dx, 0xCF8
@@ -168,10 +207,10 @@ CheckForBGA:
 		in eax, dx
 		sub dx, 4
 
-		cmp eax, 0xFFFFFFFF
+		cmp eax, 0xFFFFFFFF						; Check if device function exists
 		je .loopcont
 
-		cmp eax, 0x11111234
+		cmp eax, 0x11111234						; Check if vendor and device ids match BGA graphics card
 		je .done
 
 	.loopcont:
@@ -182,13 +221,14 @@ CheckForBGA:
 		loop .loop
 
 	.error:
+		pop dx
 		stc
 		ret
 
 	.done:
 		pop eax
 
-		mov [GraphicsCardAddress], eax
+		mov [GraphicsCardAddress], eax			; Save BGA device and function number
 		or eax, 4
 
 		out dx, eax
@@ -197,8 +237,9 @@ CheckForBGA:
 
 		in eax, dx
 		and al, 0xF0
-		mov [GraphicsFramebufferAddress], eax
+		mov [GraphicsFramebufferAddress], eax	; Save BGA graphics card BAR0
 
+		pop dx
 		clc
 		ret
 
@@ -206,7 +247,7 @@ PrintLine16:
 	push cx
 	xor cx, cx
 
-	.loop:
+	.loop:										; Writing string
 		mov al, [es:si]
 		mov [gs:di], ax
 		inc si
@@ -217,10 +258,11 @@ PrintLine16:
 		jnz .loop
 
 	sub cl, 80
-	not cl
+	not cl 										; cl = 80 - cl
+
 	inc cl
 
-	.loop2:
+	.loop2:										; Finishing up a line
 		mov word [gs:di], 0
 		inc di
 		inc di
