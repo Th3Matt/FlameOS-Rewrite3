@@ -44,6 +44,10 @@ KernelInit16:
 	.noBGA:
 
 SelectVideoMode:
+	mov si, SelectVideoModeMsg
+	mov ax, 2000h
+	mov es, ax
+
 	.setRecomended:								; Setting video driver recommendation
 		mov [Vars+0], dl
 		test dl, 00001000b
@@ -207,8 +211,8 @@ VideoModeSelectionBochs: db '  #. Bochs Graphics Adaptor (BOCHS)', 0
 GraphicsCardAddress equ Vars+0x5
 GraphicsFramebufferAddress equ Vars+0x9
 ScreenWidth equ Vars+0xD
-ScreenHeight equ Vars+0x10
-VESAMode equ Vars+0x15					; VESA mode for 800x600x32bpp
+ScreenHeight equ Vars+0x11
+VESAMode equ Vars+0x16					; VESA mode for 800x600x32bpp
 
 CheckForVBE2:
 	xor ax, ax
@@ -258,6 +262,8 @@ SetUpVBE2:
 		jne .loop
 		cmp word [es:di+0x14], 600
 		jne .loop
+		cmp byte [es:di+0x19], 32
+		jne .loop
 		test word [es:di], 1<<7
 		jz .loop
 
@@ -277,7 +283,7 @@ CheckForBGA:
 	out dx, ax
 
 	inc dx
-	in ax, dx
+	in ax, dx  
 	pop dx
 
 	cmp ax, 0xB0C1
@@ -409,498 +415,240 @@ ClearScreen:
 		loop .loop
 
 KERNEL:
+	.loading:
 		mov eax, 0xFFFFFFFF
 		xor edx, edx
-		xor ecx, ecx
-		mov dl, [ecx+StartupText-0x20000]
+		mov dl, [StartupText-0x20000]
+		mov esi, StartupText-0x20000+1
 		mov edi, edx
 		xor edx, edx
-		xor ebx, ebx
 
-		.Greet:
-			inc ecx
-			mov bl, [ecx+StartupText-0x20000]
-			call PrintChar
-			inc edx
-			cmp ecx, edi
-			jle .Greet
+		call Print.string
+
+		pusha
+
+        mov al, (2<<6) + (11b<<4) + (2<<1) + 0
+        out 0x43, al
+        mov al, 2Eh
+        out 0x40, al
+        mov al, 9Ch
+        out 0x40, al
+
+		.setPIC:
+        	mov al, 0x11
+        	out 0x20, al
+        
+        	mov al, 0x11
+        	out 0xA0, al
+        	
+        	mov al, 0x20
+        	out 0x21, al
+        	
+        	mov al, 0x28
+        	out 0xA1, al
+        	
+        	mov al, 0x04
+        	out 0x21, al
+        	
+        	mov al, 0x02
+        	out 0xA1, al
+        	
+        	mov al, 0x01
+        	out 0x21, al
+        	
+        	mov al, 0x01
+        	out 0xA1, al
+        
+        	mov al, 0x00
+        	out 0x21, al
+        
+        	mov al, 0x00
+        	out 0xA1, al
+        
+   		 	mov al, 11111110b
+    		out 0x21, al
+    		
+    		mov al, 11111111b
+    		out 0xA1, al
+
+    	call SetUpInterrupts
+
+    	popa
+
+    	call Print.newLine
+
+    	push edx
+
+    	xor edx, edx
+		mov dl, [IDTloaded-0x20000]
+		mov esi, IDTloaded-0x20000+1
+		mov edi, edx
+		pop edx
+
+		call Print.string
+
+		call ProcessManager.init
+
+        call MemoryManager.init
+
+        ;xor eax, eax
+        ;mov ecx, 4
+		;call MemoryManager.memAlloc
+		;push eax
+
+        ;xor eax, eax
+		;call MemoryManager.memAlloc
+
+		;pop ebx
+		;xor eax, eax
+		;call MemoryManager.memFree
+
+		;xor eax, eax
+		;mov ecx, 2
+		;call MemoryManager.memAlloc
+
+		;xor eax, eax
+		;mov ecx, 5
+		;call MemoryManager.memAlloc
+
+		;xor eax, eax
+		;mov ecx, 2
+		;call MemoryManager.memAlloc
+
+        ;call MemoryManager.memAllocPrint
+
+        ;call MemoryManager.memFreeAll
+
+        ;call MemoryManager.memAllocPrint
+
+        mov eax, Prog1-0x20000
+        mov ebx, (0x08<<16) + 0x28
+        mov ecx, 0x08
+        call ProcessManager.startProcess
+
+        mov eax, 0xA00
+        mov ebx, 0x500
+        call ProcessManager.setUpTask
+
+        mov ax, 0x58
+        ltr ax
+
+        ;call MemoryManager.memAllocPrint
+
+        sti
 
 		jmp $
 
-PrintChar:	;eax - Color dword, ebx - Character #, edx - Character location
-	push esi
-	push eax
-	push ecx
-	push edi
-	push ebx
-	push edx
-	push eax
+Prog1:
+    mov eax, 0x00ffffff
+    mov ebx, (200<<16) + 200
+    mov ecx, (500<<16) + 600
+    call Draw.rectangle
 
-	mov eax, [ds:Font.FontLength-0x20000]
-	cmp eax, ebx
-	jc .end
+    jmp $
 
-	mov eax, 5*4*2
-	mul edx
+IDT:
+    .modEntry:	; eax - Interrupt hander address, bh - Configuration, ecx - # of entry, edx - Segment Selector, ds - IDT segment.
+        push es
+        push edi
+
+		shl ecx, 3
+        mov edi, ecx
 	
-	push eax
+        mov [ds:edi], ax ; Offset 0:16
+        
+        shr eax, 16
+        push ax
+        
+        add edi, 2
+        
+        mov ax, dx
+        mov [ds:edi], ax ; Segment Selector 0:16
+        
+        add edi, 2
+        
+        mov al, 0
+        mov ah, bh
 
-	mov eax, 25
-	mul ebx
+        mov [ds:edi], ax ; Configuration
+        
+        add edi, 2
+        
+        pop ax
+        mov [ds:edi], ax ; Offset 16:32
+        
+        add edi, 2
 
-	pop edi
-	mov ecx, 25*2
-	xor edx, edx
+        pop edi
+        pop es
+        ret
 
-	pop ebx
+%include "KernelIncludes/Drawing.asm"
 
-	.print:
-		test byte [ds:eax+Font.Space-0x20000], 1
-		jz .print.1
+Conv:
+    .hexToChar8: ; dl - Hex number. Output: ax - chars
+        push esi
+        push ds
+        push ebx
+        push dx
 
-		mov [gs:edi], ebx
+        mov bx, 0x28
+        mov ds, bx
+        shr dl, 4
 
-		.print.1:
+        xor ebx, ebx
+        mov bl, dl
+        mov esi, .HexConvTable-0x20000
+        add esi, ebx
+        mov dl, [esi]
+        mov al, dl
+        sub esi, ebx
 
-		test byte [ds:eax+Font.Space-0x20000], 2
-		jz .print.2
+        pop dx
 
-		mov [gs:edi+4], ebx
+        and dl, 0x0F
+        xor ebx, ebx
+        mov bl, dl
+        add esi, ebx
+        mov dl, [esi]
+        mov ah, dl
+        sub esi, ebx
 
-		.print.2:
+        pop ebx
+        pop ds
+        pop esi
 
-		inc eax
-		inc edx
-		add edi, 8
-		cmp dl, 5
-		je .nextLine
-		loop .print
+        ret
 
-	.end:
-		pop edx
-		pop ebx
-		pop edi
-		pop ecx
-		pop eax
-		pop esi
-		ret
+    .hexToChar16: ; dx - Hex number. Output: ebx - chars
+        push eax
+        ror dx, 8
 
-	.nextLine:
-		mov dl, 0
+        call .hexToChar8
 
-		push es
-		push eax
+        ror dx, 8
+        shl eax, 16
 
-		mov ax, 0x10
-		mov es, ax
+        call .hexToChar8
 
-		xor eax, eax
-		mov ax, [es:ScreenWidth-Vars]
-		shl ax, 2
+        rol eax, 16
 
-		add edi, eax
+        mov ebx, eax
+        pop eax
+        ret
 
-		pop eax
-		pop es
+    .HexConvTable: db "0123456789ABCDEF"
 
-		sub edi, (5*2)*4
+%include "KernelIncludes/InterruptHandlers.asm"
 
-		cmp dh, 1 ; Checking if it's writing the second part of the 2x2 pixel cluster
-		jne .repeat
-		mov dh, 0
-
-		loop .print
-		jmp .end
-
-	.repeat:
-		dec ecx
-		mov dh, 1
-		sub ax, 5
-		jmp .print
+%include "KernelIncludes/ProcessManager.asm"
 
 %include "Drivers/VGA.asm"
 
-Font:
-	.FontLength: dd (.end-($+4))/25
-	.Space: db 0,0,0,0,0
-			db 0,0,0,0,0
-			db 0,0,0,0,0
-			db 0,0,0,0,0
-			db 0,0,0,0,0
-
-	.0: db 0,3,3,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,3,3,0
-	
-	.1: db 0,3,3,0,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-		db 0,3,3,3,0
-
-	.2: db 0,3,3,0,0
-		db 0,0,0,3,0
-		db 0,0,3,3,0
-		db 0,3,3,0,0
-		db 0,3,3,3,0
-
-	.3: db 0,3,3,0,0
-		db 0,0,0,3,0
-		db 0,3,3,0,0
-		db 0,0,0,3,0
-		db 0,3,3,0,0
-
-	.4: db 0,0,3,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,3,3,0
-		db 0,0,0,3,0
-
-	.5: db 0,3,3,3,0
-		db 0,3,0,0,0
-		db 0,3,3,0,0
-		db 0,0,0,3,0
-		db 0,3,3,0,0
-
-	.6: db 0,0,3,3,0
-		db 0,3,0,0,0
-		db 0,3,3,3,0
-		db 0,3,0,3,0
-		db 0,0,3,0,0
-
-	.7: db 0,3,3,3,0
-		db 0,0,0,3,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-
-	.8: db 0,0,3,0,0
-		db 0,3,0,3,0
-		db 0,3,3,3,0
-		db 0,3,0,3,0
-		db 0,0,3,0,0
-
-	.9: db 0,0,3,0,0
-		db 0,3,0,3,0
-		db 0,0,3,3,0
-		db 0,0,0,3,0
-		db 0,3,3,0,0
-
-	.A: db 0,0,3,0,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,3,3,0
-		db 0,3,0,3,0
-
-	.B:	db 0,3,3,0,0
-		db 0,3,0,3,0
-		db 0,3,3,3,0
-		db 0,3,0,3,0
-		db 0,3,3,0,0
-
-	.C:	db 0,0,3,3,0
-		db 0,3,0,0,0
-		db 0,3,0,0,0
-		db 0,3,0,0,0
-		db 0,0,3,3,0
-
-	.D:	db 0,3,3,0,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,3,0,0
-
-	.E: db 0,3,3,3,0
-		db 0,3,0,0,0
-		db 0,3,3,3,0
-		db 0,3,0,0,0
-		db 0,3,3,3,0
-
-	.F: db 0,3,3,3,0
-		db 0,3,0,0,0
-		db 0,3,3,3,0
-		db 0,3,0,0,0
-		db 0,3,0,0,0
-
-	.G: db 0,3,3,3,0
-		db 0,3,0,0,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,3,3,0
-
-	.H: db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,3,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-
-	.I: db 0,3,3,3,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-		db 0,3,3,3,0
-
-	.J: db 0,0,0,3,0
-		db 0,0,0,3,0
-		db 0,0,0,3,0
-		db 0,3,0,3,0
-		db 0,3,3,3,0
-
-	.K: db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,3,0,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-
-	.L: db 0,3,0,0,0
-		db 0,3,0,0,0
-		db 0,3,0,0,0
-		db 0,3,0,0,0
-		db 0,3,3,3,0
-
-	.M: db 0,3,0,3,0
-		db 0,3,3,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-
-	.N: db 0,3,0,3,0
-		db 0,3,3,3,0
-		db 0,3,3,3,0
-		db 0,3,3,3,0
-		db 0,3,0,3,0
-
-	.O: db 0,0,3,0,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,0,3,0,0
-
-	.P: db 0,3,3,0,0
-		db 0,3,0,3,0
-		db 0,3,3,0,0
-		db 0,3,0,0,0
-		db 0,3,0,0,0
-
-	.Q: db 0,0,3,0,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,0,3,3,0
-
-	.R: db 0,3,3,0,0
-		db 0,3,0,3,0
-		db 0,3,3,0,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-
-	.S: db 0,3,3,3,0
-		db 0,3,0,0,0
-		db 0,3,3,3,0
-		db 0,0,0,3,0
-		db 0,3,3,3,0
-
-	.T: db 0,3,3,3,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-
-	.U: db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,3,3,0
-
-	.V: db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,0,3,0,0
-
-	.W: db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,3,3,0
-		db 0,3,3,3,0
-
-	.X: db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,0,3,0,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-
-	.Y: db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-
-	.Z: db 0,3,3,3,0
-		db 0,0,0,3,0
-		db 0,0,3,0,0
-		db 0,3,0,0,0
-		db 0,3,3,3,0
-	
-	.a: db 0,3,3,0,0
-		db 0,0,0,3,0
-		db 0,0,3,3,0
-		db 0,3,0,3,0
-		db 0,3,3,3,0
-
-	.b:	db 0,3,0,0,0
-		db 0,3,0,0,0
-		db 0,3,3,0,0
-		db 0,3,0,3,0
-		db 0,3,3,0,0
-
-	.c:	db 0,0,0,0,0
-		db 0,0,0,0,0
-		db 0,0,3,0,0
-		db 0,3,0,0,0
-		db 0,0,3,0,0
-
-	.d:	db 0,0,0,3,0
-		db 0,0,0,3,0
-		db 0,0,3,3,0
-		db 0,3,0,3,0
-		db 0,0,3,3,0
-
-	.e: db 0,0,3,0,0
-		db 0,3,0,3,0
-		db 0,3,3,0,0
-		db 0,3,0,0,0
-		db 0,0,3,3,0
-
-	.f: db 0,0,3,3,0
-		db 0,0,3,0,0
-		db 0,3,3,3,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-
-	.g: db 0,3,3,3,0
-		db 0,3,0,0,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,3,3,0
-
-	.h: db 0,3,0,0,0
-		db 0,3,0,0,0
-		db 0,3,3,0,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-
-	.i: db 0,0,3,0,0
-		db 0,0,0,0,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-
-	.j: db 0,0,0,3,0
-		db 0,0,0,0,0
-		db 0,0,0,3,0
-		db 0,3,0,3,0
-		db 0,3,3,3,0
-
-	.k: db 0,3,0,0,0
-		db 0,3,0,3,0
-		db 0,3,3,0,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-
-	.l: db 0,3,3,0,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-		db 0,0,3,3,0
-
-	.m: db 0,0,0,0,0
-		db 0,0,0,0,0
-		db 0,3,0,3,0
-		db 0,3,3,3,0
-		db 0,3,0,3,0
-
-	.n: db 0,0,0,0,0
-		db 0,0,0,0,0
-		db 0,3,3,0,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-
-	.o: db 0,0,0,0,0
-		db 0,0,0,0,0
-		db 0,0,3,0,0
-		db 0,3,0,3,0
-		db 0,0,3,0,0
-
-	.p: db 0,0,0,0,0
-		db 0,3,3,0,0
-		db 0,3,0,3,0
-		db 0,3,3,0,0
-		db 0,3,0,0,0
-
-	.q: db 0,0,0,0,0
-		db 0,0,0,0,0
-		db 0,0,3,0,0
-		db 0,3,0,3,0
-		db 0,0,3,3,0
-
-	.r: db 0,0,0,0,0
-		db 0,3,3,0,0
-		db 0,3,0,3,0
-		db 0,3,3,0,0
-		db 0,3,0,3,0
-
-	.s: db 0,0,3,3,0
-		db 0,3,0,0,0
-		db 0,0,3,0,0
-		db 0,0,0,3,0
-		db 0,3,3,0,0
-
-	.t: db 0,0,3,0,0
-		db 0,3,3,3,0
-		db 0,0,3,0,0
-		db 0,0,3,0,0
-		db 0,0,0,3,0
-
-	.u: db 0,0,0,0,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,0,3,3,0
-
-	.v: db 0,0,0,0,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,0,3,0,0
-
-	.w: db 0,0,0,0,0
-		db 0,0,0,0,0
-		db 0,3,0,3,0
-		db 0,3,3,3,0
-		db 0,3,3,3,0
-
-	.x: db 0,0,0,0,0
-		db 0,0,0,0,0
-		db 0,3,0,3,0
-		db 0,0,3,0,0
-		db 0,3,0,3,0
-
-	.y: db 0,0,0,0,0
-		db 0,3,0,3,0
-		db 0,3,0,3,0
-		db 0,0,3,0,0
-		db 0,3,0,0,0
-
-	.z: db 0,0,0,0,0
-		db 0,3,3,3,0
-		db 0,0,0,3,0
-		db 0,0,3,0,0
-		db 0,3,3,3,0
+StartupText:  db (.end-$-1), "FlameOS Starting up...", 10, "Video driver initialised."
 	.end:
 
-				   					  ;F   L   A   M   E   O   S   _   S   T   A   R   T   U   P
-StartupText:  db (.end-StartupText-1), 16, 48, 37, 49, 41, 25, 29, 00, 29, 56, 37, 54, 56, 57, 52
+IDTloaded:	  db (.end-$-1), "IDT initialised."
 	.end:
+
+%include "KernelIncludes/Glyphs.asm"

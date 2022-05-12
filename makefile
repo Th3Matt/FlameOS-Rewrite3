@@ -9,4 +9,7 @@ FS.bin: Bootloader.asm
 	nasm -fbin Bootloader.asm -o "Builds/BL.bin"
 	dd if="Builds/BL.bin" of="Builds/FS.bin" bs=512 conv=notrunc
 	dd if="Builds/FS1.bin" of="Builds/FS.bin" bs=512 seek=1 conv=notrunc
+
+qemu: Builds/FlameOS.img
 	
+	qemu-system-x86_64 -sdl -vga std -drive file=Builds/FlameOS.img,format=raw

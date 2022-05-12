@@ -89,7 +89,7 @@ Boot:
     	    mov dh, 0
     	    mov dl, ds:[SVO]
         	
-        	mov al, 20
+        	mov al, 40
         	push ax
     	    mov ah, 0x02
     	    mov bx, 0x2000

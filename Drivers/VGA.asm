@@ -378,7 +378,12 @@ InitBGA:
 	dec dx
 	out dx, ax ;0x1CE
 
-	mov ax, 720		; X
+	push es
+	mov ax, 0x10
+	mov es, ax
+
+	mov ax, 800		; X
+	mov [es:ScreenWidth-Vars], ax
 	inc dx
 	out dx, ax ;0x1CF
 
@@ -386,9 +391,12 @@ InitBGA:
 	dec dx
 	out dx, ax ;0x1CE
 
-	mov ax, 400		;	Y
+	mov ax, 600		;	Y
+	mov [es:ScreenHeight-Vars], ax
 	inc dx
 	out dx, ax ;0x1CF
+
+	pop es
 
 	mov ax, 0x3
 	dec dx
