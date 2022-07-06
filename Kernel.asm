@@ -173,7 +173,7 @@ SelectVideoMode:
 				cmp edx, "VGAH"
 				jne .done
 
-				mov dword [GraphicsFramebufferAddress], 0xA0000
+				mov dword [Vars+GraphicsFramebufferAddress], 0xA0000
 
 				jmp .done
 
@@ -181,9 +181,9 @@ SelectVideoMode:
 				xor ax, ax
 				mov es, ax
 				mov eax, [es:0x6500+0x28]
-				mov [GraphicsFramebufferAddress], eax
+				mov [Vars+GraphicsFramebufferAddress], eax
 
-				mov bx, [VESAMode]
+				mov bx, [Vars+VESAMode]
 				or bh, 01000000b
 				mov ax, 0x4F02
 
@@ -192,8 +192,8 @@ SelectVideoMode:
 				cmp ax, 0x004F
 				jne .error
 
-				mov dword [ScreenWidth], 800
-				mov dword [ScreenHeight], 600
+				mov dword [Vars+ScreenWidth], 800
+				mov dword [Vars+ScreenHeight], 600
 
 			.done:
 
@@ -208,11 +208,13 @@ SelectVideoModeMsg: 	 db 'Select a video driver. Recomended video mode is: VGAH_
 VideoModeSelectionVBE:	 db '  2. Video BIOS Extentions 2.0+ (VBE2+)', 0
 VideoModeSelectionBochs: db '  #. Bochs Graphics Adaptor (BOCHS)', 0
 
-GraphicsCardAddress equ Vars+0x5
-GraphicsFramebufferAddress equ Vars+0x9
-ScreenWidth equ Vars+0xD
-ScreenHeight equ Vars+0x11
-VESAMode equ Vars+0x16					; VESA mode for 800x600x32bpp
+GraphicsCardAddress equ 0x5
+GraphicsFramebufferAddress equ 0x9
+ScreenWidth equ 0xD
+ScreenHeight equ 0x11
+VESAMode equ 0x16					; VESA mode for 800x600x32bpp
+DiskDriverVariableSpace equ 0x100;+Vars
+PCIDriverVariableSpace equ 0x150;+Vars
 
 CheckForVBE2:
 	xor ax, ax
@@ -268,7 +270,7 @@ SetUpVBE2:
 		jz .loop
 
 	.end:
-		mov [es:VESAMode], cx
+		mov [es:Vars+VESAMode], cx
 		clc
 		ret
 
@@ -333,7 +335,7 @@ CheckBGACard:
 	.done:
 		pop eax
 
-		mov [GraphicsCardAddress], eax			; Save BGA device and function number
+		mov [Vars+GraphicsCardAddress], eax			; Save BGA device and function number
 		or eax, 10h
 
 		out dx, eax
@@ -342,7 +344,7 @@ CheckBGACard:
 
 		in eax, dx
 		and al, 0xF0
-		mov [GraphicsFramebufferAddress], eax	; Save BGA graphics card BAR0
+		mov [Vars+GraphicsFramebufferAddress], eax	; Save BGA graphics card BAR0
 
 		pop dx
 		clc
@@ -535,7 +537,12 @@ KERNEL:
 
         ;call MemoryManager.memAllocPrint
 
-        sti
+        call PCIDriver.detectDevices
+
+		call S_ATA_PI.detectDevices
+
+		;sti
+        cli
 
 		jmp $
 
@@ -652,3 +659,9 @@ IDTloaded:	  db (.end-$-1), "IDT initialised."
 	.end:
 
 %include "KernelIncludes/Glyphs.asm"
+
+%include "Drivers/ATA.asm"
+
+%include "Drivers/PCI.asm"
+
+times 0x200*32-($-$$) db 0

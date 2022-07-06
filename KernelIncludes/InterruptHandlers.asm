@@ -74,6 +74,13 @@ SetUpInterrupts:
 
     call IDT.modEntry
 
+    mov eax, Exceptions.SS-0x20000
+    mov bh, 10001110b ; DPL 0, Interrupt Gate
+    mov ecx, 0xC
+    mov edx, 0x28 ; Kernel code
+
+    call IDT.modEntry
+
     mov eax, Exceptions.GP-0x20000
     mov bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0xD
@@ -114,6 +121,10 @@ Exceptions:
         push dword "G"+("P"<<16)
         call .panicScreen
 
+    .SS:
+        push dword "S"+("S"<<16)
+        call .panicScreen
+
     .panicScreen:
         mov ax, 0x38
         mov es, ax
@@ -123,7 +134,7 @@ Exceptions:
 
         xor edi, edi
         xor ecx, ecx
-        mov cx, ds:[ScreenWidth-Vars]
+        mov cx, ds:[ScreenWidth]
         push ecx
 
         mov eax, (21*2)

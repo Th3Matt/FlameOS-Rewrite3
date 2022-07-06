@@ -127,28 +127,28 @@
     add di, 4
                     ;---------------------38       -      38         -   Video RAM
                     ;a0000 - e6500 or PCI device 1234:1111 BAR0
-    mov eax, [GraphicsFramebufferAddress]
+    mov eax, [GraphicsFramebufferAddress+Vars]
     shr eax, 12
     add ax, (800*600*4)>>12
     mov [di], ax
 
     add di, 2
 
-    mov ax, [GraphicsFramebufferAddress]
+    mov ax, [GraphicsFramebufferAddress+Vars]
     mov [di], ax
 
     add di, 2
 
     xor ecx, ecx
-    mov cl, [GraphicsFramebufferAddress+3]
+    mov cl, [GraphicsFramebufferAddress+3+Vars]
     shr cl, 4
     and cl, 00001111b
     or cl, 11000000b
-    mov ch, [GraphicsFramebufferAddress+3]
+    mov ch, [GraphicsFramebufferAddress+3+Vars]
 
     shl ecx, 16
     mov ch, 10010010b
-    mov cl, [GraphicsFramebufferAddress+2]
+    mov cl, [GraphicsFramebufferAddress+2+Vars]
     mov [di], ecx
 
     add di, 4
@@ -299,6 +299,26 @@
     add di, 2
 
     mov ax, 0x7900
+    mov [di], ax
+
+    add di, 2
+
+    xor ecx, ecx
+    mov ch, 01010000b
+    shl ecx, 8
+    mov ch, 10010010b
+    ;mov cl, 0x0
+    mov [di], ecx
+
+    add di, 4
+                    ;---------------------80       -      80         -   PCI Driver Data
+                    ;9000 - 9fff
+    mov ax, 0x9fff
+    mov [di], ax
+
+    add di, 2
+
+    mov ax, 0x9000
     mov [di], ax
 
     add di, 2

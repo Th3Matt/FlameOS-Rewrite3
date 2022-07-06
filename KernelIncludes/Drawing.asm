@@ -1,6 +1,7 @@
 Print:
     .string:    ; eax - Pixel color, edx - First char printing location, esi - String start address, edi - String length, ds - string segment
         push ebx
+        push ecx
         dec edi
         xor ebx, ebx
         xor ecx, ecx
@@ -22,6 +23,7 @@ Print:
             cmp ecx, edi
             jle .string.loop
 
+        pop ecx
         pop ebx
         ret
 
@@ -37,7 +39,7 @@ Print:
 		mov cx, 0x10
 		mov es, cx
 
-		mov cx, [es:ScreenWidth-Vars]
+		mov cx, [es:ScreenWidth]
 
         pop es
 		push eax
@@ -159,7 +161,7 @@ Print:
             mov es, ax
 
             xor eax, eax
-            mov eax, [es:ScreenWidth-Vars]
+            mov eax, [es:ScreenWidth]
             shl eax, 3
 
             add edi, eax
@@ -183,7 +185,7 @@ Print:
             mov es, ax
 
             xor eax, eax
-            mov eax, [es:ScreenWidth-Vars]
+            mov eax, [es:ScreenWidth]
 
             shl eax, 2
             add edi, eax
@@ -302,7 +304,7 @@ Draw:
         mov dx, bx
         shr ebx, 16
         xor eax, eax
-        mov ax, [es:ScreenWidth-Vars]
+        mov ax, [es:ScreenWidth]
         push edx
         mul ebx
         pop edx
@@ -314,7 +316,7 @@ Draw:
         mov si, cx
         shr ecx, 16
         xor eax, eax
-        mov ax, [es:ScreenWidth-Vars]
+        mov ax, [es:ScreenWidth]
 
         sub edx, esi
         not edx

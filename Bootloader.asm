@@ -124,6 +124,20 @@ Boot:
 
     
 	.C: db 0x0
+times 446-($-$$) db 0
+
+PartitionTable:
+	.partition1:
+		db 0x80 ;Bootable
+		db 0xFF ;Filler values, I don't care enough to populate those fields
+		db 0xFF
+		db 0xFF
+		db 0xC8 ;I'm pretty sure this partition ID is unused
+		db 0xFF
+		db 0xFF
+		db 0xFF
+		dd 0x00000001
+		dd 0x00000800+1
 
 times 510-($-$$) db 0
 
