@@ -11,9 +11,131 @@ KernelInit16:
 	mov ax, 0xB800
 	mov gs, ax
 
+CustomSettings:
 	xor di, di
 	mov cx, 80*25*2/4
+	.clearScreen:
+		mov dword [gs:di], 0
+		add di, 4
+		loop .clearScreen
 
+	xor di, di
+	mov si, CustomSettingsMsg-a&0xFFFF
+	mov ax, 0x2000
+	mov es, ax
+	mov ah, 0x0F
+	mov word [CustomSetting+Vars], 0
+
+	call PrintLine16
+
+	sti
+
+	.waitForInput:
+		mov ah, 1
+		int 0x16							; Waiting for input
+		jz .waitForInput
+
+		mov ah, 0
+		int 0x16
+
+		cmp ah, 0x1C 						; Check selection if Enter button pressed
+		je .test
+
+		cmp al, 0x6E ; n
+		je .waitForInput.1
+
+		cmp al, 0x79 ; y
+		je .waitForInput.1
+		jmp .waitForInput
+
+		.waitForInput.1:
+		mov ah, 0x0F
+		mov [gs:((80*23)+(80/2))*2], ax 	; Writing
+		jmp .waitForInput
+
+	.test:
+		mov ax, [gs:((80*23)+(80/2))*2]
+		cmp al, 0x79
+		jnz SelectVideoMode
+		xor bx, bx
+
+	xor di, di
+	mov cx, 80*25*2/4
+	.clearScreen2:
+		mov dword [gs:di], 0
+		add di, 4
+		loop .clearScreen2
+
+	xor di, di
+	mov si, CustomSettingsMsg2-a&0xFFFF
+	mov ax, 0x2000
+	mov es, ax
+	mov ah, 0x0F
+
+	call PrintLine16
+
+	.setSettings:
+		mov ah, 1
+		int 0x16							; Waiting for input
+		jz .setSettings
+
+		mov ah, 0
+		push bx
+		int 0x16
+		pop bx
+
+		cmp ah, 0x1C 						; Check selection if Enter button pressed
+		je .exit
+
+		cmp al, 0x08 						; Check selection if backspace button pressed
+		je .backspace
+
+		cmp al, 0x6E ; n
+		je .setSettings.1
+
+		cmp al, 0x79 ; y
+		je .setSettings.1
+		jmp .setSettings
+
+		.setSettings.1:
+		mov ah, 0x0F
+		mov word [gs:bx+17*2], ax 	; Writing
+		inc bx
+		inc bx
+		jmp .setSettings
+
+	.backspace:
+		cmp bx, 0
+		jz .setSettings
+		dec bx
+		dec bx
+		xor ax, ax
+		mov word [gs:bx+17*2], ax
+		jmp .setSettings
+
+	.exit:
+		xor cx, cx
+		.exit.loop:
+			mov ax, [gs:bx+17*2-2]
+
+			cmp bx, 0
+			jz .end
+
+			dec bx
+			dec bx
+
+			shl cx, 1
+			cmp al, 0x79
+			jnz .exit.loop
+			or cx, 1
+
+			jmp .exit.loop
+	.end:
+		mov [CustomSetting+Vars], cx
+
+SelectVideoMode:
+	xor di, di
+	mov cx, 80*25*2/4
 	.clearScreen:
 		mov dword [gs:di], 0
 		add di, 4
@@ -39,17 +161,14 @@ KernelInit16:
 	jc .noBGA
 
 	or dl, 00001000b							; BGA graphics card found
-	jmp SelectVideoMode
 
 	.noBGA:
-
-SelectVideoMode:
 	mov si, SelectVideoModeMsg
 	mov ax, 2000h
 	mov es, ax
 
 	.setRecomended:								; Setting video driver recommendation
-		mov [Vars+0], dl
+		mov ds:[Vars+VideoHardwareInterfaces], dl
 		test dl, 00001000b
 		jz .notBochs
 
@@ -129,7 +248,7 @@ SelectVideoMode:
 			int 0x16
 
 			cmp ah, 0x1C 						; Check selection if Enter button pressed
-			je .testSecection
+			je .testSelection
 
 			cmp al, 0x30						; Check if number (lower bound)
 			jl .waitForInput
@@ -152,7 +271,7 @@ SelectVideoMode:
 				mov byte [gs:((80*23)+(80/2))*2+1], 0x40
 				jmp .printEnd
 
-			.testSecection:
+			.testSelection:
 				mov ah, [gs:((80*23)+(80/2))*2]
 				cmp ah, 0
 				jz .waitForInput
@@ -203,6 +322,8 @@ SelectVideoMode:
 Selection: db 'VGAH'
 		   dd 0
 		   dd 0
+CustomSettingsMsg:		 db 'Do you want to set debug settings? Press [n] if no.', 0
+CustomSettingsMsg2:		 db 'Custom settings: ', 0
 SelectVideoModeMsg: 	 db 'Select a video driver. Recomended video mode is: VGAH_', 0
                          db '  1. VGA Hardware Driver (VGAH_)', 0
 VideoModeSelectionVBE:	 db '  2. Video BIOS Extentions 2.0+ (VBE2+)', 0
@@ -212,9 +333,12 @@ GraphicsCardAddress equ 0x5
 GraphicsFramebufferAddress equ 0x9
 ScreenWidth equ 0xD
 ScreenHeight equ 0x11
-VESAMode equ 0x16					; VESA mode for 800x600x32bpp
+VESAMode equ 0x16							; VESA mode for 800x600x32bpp
+VideoHardwareInterfaces equ 0x18
+CustomSetting equ 0x80 						; First two bits control the detection of disks on ATA buses 0 and 1
 DiskDriverVariableSpace equ 0x100;+Vars
 PCIDriverVariableSpace equ 0x150;+Vars
+
 
 CheckForVBE2:
 	xor ax, ax
@@ -539,12 +663,38 @@ KERNEL:
 
         call PCIDriver.detectDevices
 
+        test byte es:[CustomSetting], 100b
+        jnz PCITest
+
 		call S_ATA_PI.detectDevices
+		call EDDV3Read
+
+		call Print.newLine
+        call FlFS.init
+
+        mov esi, Strings.Terminal-0x20000
+        call FlFS.getFileNumber
+
+        mov di, 0x08
+        mov ds, di
+        xor edi, edi
+        call FlFS.readFile
 
 		;sti
         cli
 
 		jmp $
+
+Strings:
+	.Terminal:
+		db 'Terminal.ub', 0
+
+%include "KernelIncludes/EDD.asm"
+
+PCITest:
+	call PCIDriver.printDeviceTable
+
+	jmp $
 
 Prog1:
     mov eax, 0x00ffffff
@@ -652,10 +802,10 @@ Conv:
 
 %include "Drivers/VGA.asm"
 
-StartupText:  db (.end-$-1), "FlameOS Starting up...", 10, "Video driver initialised."
+StartupText:  db (.end-$-1), "Kernel: FlameOS Starting up...", 10, "Kernel: Video driver initialised."
 	.end:
 
-IDTloaded:	  db (.end-$-1), "IDT initialised."
+IDTloaded:	  db (.end-$-1), "Kernel: IDT initialised."
 	.end:
 
 %include "KernelIncludes/Glyphs.asm"
@@ -663,5 +813,9 @@ IDTloaded:	  db (.end-$-1), "IDT initialised."
 %include "Drivers/ATA.asm"
 
 %include "Drivers/PCI.asm"
+
+%include "Drivers/VFS.asm"
+
+%include "Drivers/FLFS.asm"
 
 times 0x200*32-($-$$) db 0

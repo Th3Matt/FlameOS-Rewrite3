@@ -383,7 +383,7 @@ InitBGA:
 	mov es, ax
 
 	mov ax, 800		; X
-	mov [es:ScreenWidth-Vars], ax
+	mov [es:ScreenWidth], ax
 	inc dx
 	out dx, ax ;0x1CF
 
@@ -392,7 +392,7 @@ InitBGA:
 	out dx, ax ;0x1CE
 
 	mov ax, 600		;	Y
-	mov [es:ScreenHeight-Vars], ax
+	mov [es:ScreenHeight], ax
 	inc dx
 	out dx, ax ;0x1CF
 

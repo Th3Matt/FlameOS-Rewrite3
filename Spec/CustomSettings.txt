@@ -1,0 +1,4 @@
+ 
+bit 1 - Disable ATA bus 1
+bit 2 - Disable ATA bus 2
+bit 3 - Show PCI device table

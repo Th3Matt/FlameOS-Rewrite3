@@ -330,6 +330,26 @@
     ;mov cl, 0x0
     mov [di], ecx
 
+    add di, 4
+                    ;---------------------88       -      88         -   Filesystem header
+                    ;a000 - bfff
+    mov ax, 0xbfff
+    mov [di], ax
+
+    add di, 2
+
+    mov ax, 0xa000
+    mov [di], ax
+
+    add di, 2
+
+    xor ecx, ecx
+    mov ch, 01010000b
+    shl ecx, 8
+    mov ch, 10010010b
+    ;mov cl, 0x0
+    mov [di], ecx
+
     add di, 4       ;=====================
 
     mov si, di
@@ -341,6 +361,8 @@
     mov dword [di], GDTLoc
 
     xchg bx, bx
+
+    cli
 
     lgdt [eax]
 

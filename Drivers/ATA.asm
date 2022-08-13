@@ -28,9 +28,18 @@ ATA_DF   equ 00100000b    ; Drive fault (no ERR)
 ATA_RDY  equ 01000000b    ; Ready
 ATA_BSY  equ 10000000b    ; Busy
 
-ADB  equ DiskDriverVariableSpace+0 ; Available disk bus' bitmap
-ADA1 equ DiskDriverVariableSpace+1 ; ATA disk availability bitmap 1
-ADA2 equ DiskDriverVariableSpace+2 ; ATA disk availability bitmap 2
+ADB     equ DiskDriverVariableSpace+0    ; Available disk bus' bitmap
+ABAddr1 equ DiskDriverVariableSpace+2    ; ATA bus 1 IO address
+ABAddr2 equ DiskDriverVariableSpace+4    ; ATA bus 2 IO address
+ADA1    equ DiskDriverVariableSpace+0x10 ; ATA disk availability field for bus 1
+ADA2    equ DiskDriverVariableSpace+0x11 ; ATA disk availability field for bus 2
+
+EndOfATADriverSpace equ DiskDriverVariableSpace+0x20
+
+ATA_READ  equ 0x20
+ATA_WRITE equ 0x30
+
+ATA_MAX_DRIVE_ERRORS equ 3
 
 S_ATA_PI:
     .delay400: ; dx - ATA status register port
@@ -43,9 +52,9 @@ S_ATA_PI:
         ret
 
     .detectDevices:
-        pusha
         push ds
         push es
+        push fs
         push edx
 
         mov dx, 0x10
@@ -54,7 +63,25 @@ S_ATA_PI:
         mov dx, 0x28
         mov ds, dx
 
+        test byte es:[CustomSetting], 1
+        jnz .detectDevices.bus2
+
+        mov eax, 0x01018000
+        mov ebx, 0x3
+
+        call PCIDriver.deviceInfoByDword3
+        jc .detectDevices.nonExistantBus
+
+        mov edx, eax
+        cmp edx, 0
+        jnz .detectDevices.bus1.nonDefault
+
         mov edx, ATA1
+
+        .detectDevices.bus1.nonDefault:
+
+        mov es:[ABAddr1], dx
+
         add dx, ATA_SR
 
         in al, dx
@@ -73,7 +100,27 @@ S_ATA_PI:
 
         .detectDevices.bus2:
 
+        test byte es:[CustomSetting], 10b
+        jnz .detectDevices.bus2Done
+
+        ;jmp .detectDevices.bus2Done ; Skip bus 2
+
+        mov eax, 0x01018000
+        mov ebx, 0x5
+
+        call PCIDriver.deviceInfoByDword3
+        jc .detectDevices.nonExistantBus
+
+        mov edx, eax
+        cmp edx, 0
+        jnz .detectDevices.bus2.nonDefault
+
         mov edx, ATA2
+
+        .detectDevices.bus2.nonDefault:
+
+        mov es:[ABAddr2], dx
+
         add dx, ATA_SR
 
         in al, dx
@@ -85,17 +132,17 @@ S_ATA_PI:
         pop edi  ; pop edx
         call .checkATABus
         push edi ; push edx
+
         test byte es:[ADA2], 00010001b
         jz .detectDevices.bus2OFF
 
         or byte es:[ADB], 2
 
         .detectDevices.bus2Done:
-
         pop edx
+        pop fs
         pop es
         pop ds
-        popa
         ret
 
         .detectDevices.bus1OFF:
@@ -134,6 +181,8 @@ S_ATA_PI:
             test byte es:[ADB], 1
             jnz .detectDevices.bus2Done
 
+        .detectDevices.nonExistantBus:
+            pop edx
         .detectDevices.allBusOFF:
             xor eax, eax
             mov al, [.noBusOnMessage-0x20000]
@@ -153,8 +202,6 @@ S_ATA_PI:
         push edx
         push esi
 
-        mov ecx, 3
-        push ecx
         .checkATABus.Disk1:
 
         mov esi, .noBus1Message-0x20000+1
@@ -213,7 +260,7 @@ S_ATA_PI:
         out dx, al
 
         add edx, 5
-        mov eax, 0xE0
+        mov eax, 0xEC
 
         out dx, al
 
@@ -222,6 +269,7 @@ S_ATA_PI:
         jnz .checkATABus.Disk1.1
 
         call .checkATABus.Disks.noDisk
+
         jmp .checkATABus.Disk2
 
         .checkATABus.Disk1.1:
@@ -246,13 +294,16 @@ S_ATA_PI:
         .checkATABus.Disk1.loop1.done:
         dec edx
         dec edx
+
         in al, dx
         dec edx
+        push ax
 
         cmp al, 0
         jz .checkATABus.Disk1.3
 
         call .checkATABus.Disks.notATA
+        pop ax
         jmp .checkATABus.Disk2
 
         .checkATABus.Disk1.3:
@@ -262,29 +313,29 @@ S_ATA_PI:
         cmp al, 0
         jz .checkATABus.Disk1.4
 
-        call .checkATABus.Disks.notATA
+        call .checkATABus.Disks.notATA.1
+        pop ax
         jmp .checkATABus.Disk2
 
         .checkATABus.Disk1.4:
+        pop ax
 
         add edx, 3
+        mov ecx, ATA_MAX_DRIVE_ERRORS
 
         .checkATABus.Disk1.loop2:
             in al, dx
-            test al, ATA_ERR
+            test al, (ATA_ERR|ATA_DF)
             jz .checkATABus.Disk1.5
-            pop ecx
             call .checkATABus.Disks.error
             jc .checkATABus.Disk2
-            push ecx
             jmp .checkATABus.Disk1
 
             .checkATABus.Disk1.5:
 
             test al, ATA_DRQ
-            jnz .checkATABus.Disk1.loop2
+            jz .checkATABus.Disk1.loop2
 
-        pop ecx
         sub edx, 7
         mov ecx, 256
 
@@ -317,8 +368,6 @@ S_ATA_PI:
 
         add edx, 3
 
-        mov ecx, 3
-        push ecx
         .checkATABus.Disk2:
 
         add edx, 3
@@ -377,7 +426,7 @@ S_ATA_PI:
         out dx, al
 
         add edx, 5
-        mov eax, 0xE0
+        mov eax, 0xEC
 
         out dx, al
 
@@ -386,6 +435,7 @@ S_ATA_PI:
         jnz .checkATABus.Disk2.1
 
         call .checkATABus.Disks.noDisk
+        pop ecx
         jmp .checkATABus.end
 
         .checkATABus.Disk2.1:
@@ -413,11 +463,13 @@ S_ATA_PI:
 
         in al, dx
         dec edx
+        push ax
 
         cmp al, 0
         jz .checkATABus.Disk2.3
 
         call .checkATABus.Disks.notATA
+        pop ax
         jmp .checkATABus.end
 
         .checkATABus.Disk2.3:
@@ -427,29 +479,29 @@ S_ATA_PI:
         cmp al, 0
         jz .checkATABus.Disk2.4
 
-        call .checkATABus.Disks.notATA
+        call .checkATABus.Disks.notATA.1
+        pop ax
         jmp .checkATABus.end
 
         .checkATABus.Disk2.4:
+        pop ax
 
         add edx, 3
+        mov ecx, ATA_MAX_DRIVE_ERRORS
 
         .checkATABus.Disk2.loop2:
             in al, dx
-            test al, ATA_ERR
+            test al, (ATA_ERR|ATA_DF)
             jz .checkATABus.Disk2.5
-            pop ecx
             call .checkATABus.Disks.error
             jc .checkATABus.end
-            push ecx
             jmp .checkATABus.Disk2
 
             .checkATABus.Disk2.5:
 
             test al, ATA_DRQ
-            jnz .checkATABus.Disk2.loop2
+            jz .checkATABus.Disk2.loop2
 
-        pop ecx
         sub edx, 7
         mov ecx, 256
 
@@ -491,9 +543,15 @@ S_ATA_PI:
 
         .checkATABus.Disks.notATA:
             in al, dx
-            dec dx
+
+            .checkATABus.Disks.notATA.1:
+
+            shl eax, 16
+            add esp, 4
+            pop ax
+            sub esp, 6
             shl ax, 8
-            in al, dx
+            shr eax, 8
 
             cmp ax, 0x14EB
             jne .checkATABus.Disks.notATAPI
@@ -648,7 +706,432 @@ S_ATA_PI:
             pop eax
 
             pop edx
+            sub edx, 4
             pop edi
+            ret
+
+    .readSectors:   ; eax - starting sector, ebx - disk #, ecx - sectors to read, edi - buffer, fs - buffer selector.
+        pusha
+        push ds
+
+        mov dx, 0x10
+        mov ds, dx
+
+        test ebx, 1
+        jnz .readSectors.secondDisk
+
+        .readSectors.firstDisk:
+
+        shr ebx, 1
+
+        mov esi, ADA1
+        add esi, ebx
+
+        mov dl, ds:[esi]
+
+        and dl, 1111b
+
+        cmp dl, 0001b
+        jne .readSectors.notATA
+
+        .readSectors.firstDisk.ATA:
+
+        xor esi, esi
+        mov si,  ABAddr1
+        shl ebx, 1
+        add esi, ebx
+        mov dx,  ds:[esi]
+
+        add dx,  ATA_DHR
+
+        push eax
+
+        shr eax, 24
+        and al,  00001111b
+        or  al,  11100000b
+
+        out dx,  al
+
+        inc dx
+
+        call .delay400
+
+        dec dx
+        dec dx
+
+        pop  eax
+        push eax
+
+        shr eax, 16
+
+        out dx,  al
+
+        pop  eax
+        push eax
+
+        shr eax, 8
+        dec dx
+
+        out dx,  al
+
+        pop  eax
+
+        dec dx
+
+        out dx,  al
+
+        mov eax, ecx
+        dec dx
+
+        out dx,  al
+
+        add dx,  ATA_CR-2
+        mov al,  ATA_READ
+
+        out dx, al
+
+        call .ATA.waitUntilDone
+        jc .readSectors.ATA.error
+
+        sub dx, 7
+        shl ecx, 7
+
+        push es
+
+        push edx
+        mov dx, fs
+        mov es, dx
+        pop edx
+
+        rep insd
+
+        pop es
+
+        jmp .readSectors.ATA.done
+
+        .readSectors.secondDisk:
+
+        shr ebx, 1
+
+        mov esi, ADA1
+        add esi, ebx
+
+        mov dl, ds:[esi]
+
+        and dl, 11110000b
+
+        cmp dl, 00010000b
+        jne .readSectors.notATA
+
+        .readSectors.secondDisk.ATA:
+
+        xor esi, esi
+        mov si,  ABAddr1
+        shl ebx, 1
+        add esi, ebx
+        mov dx,  ds:[esi]
+
+        add dx,  ATA_DHR
+
+        push eax
+
+        shr eax, 24
+        and al,  00001111b
+        or  al,  11110000b
+
+        out dx,  al
+
+        inc dx
+
+        call .delay400
+
+        dec dx
+        dec dx
+
+        pop  eax
+        push eax
+
+        shr eax, 16
+
+        out dx,  al
+
+        pop  eax
+        push eax
+
+        shr eax, 8
+        dec dx
+
+        out dx,  al
+
+        pop eax
+
+        dec dx
+
+        out dx,  al
+
+        mov eax, ecx
+        dec dx
+
+        out dx,  al
+
+        add dx,  ATA_CR-2
+        mov al,  ATA_READ
+
+        out dx, al
+
+        call .ATA.waitUntilDone
+        jc .readSectors.ATA.error
+
+        sub dx, 7
+        shl ecx, 7
+
+        push es
+
+        push edx
+        mov dx, fs
+        mov es, dx
+        pop edx
+
+        rep insd
+
+        pop es
+
+        .readSectors.ATA.done:
+            clc
+        .readSectors.ATA.end:
+            pop ds
+            popa
+            ret
+
+        .readSectors.ATA.error:
+            stc
+            jmp .readSectors.ATA.end
+
+        .readSectors.notATA:
+            jmp .readSectors.ATA.error
+
+    .writeSectors:   ; eax - starting sector, ebx - disk #, ecx - sectors to write, esi - buffer, fs - buffer selector.
+        pusha
+        push ds
+
+        mov dx, 0x10
+        mov ds, dx
+
+        test ebx, 1
+        jnz .writeSectors.secondDisk
+
+        .writeSectors.firstDisk:
+
+        shr ebx, 1
+
+        mov edi, ADA1
+        add edi, ebx
+
+        mov dl, ds:[edi]
+
+        and dl, 1111b
+
+        cmp dl, 0001b
+        jne .writeSectors.notATA
+
+        .writeSectors.firstDisk.ATA:
+
+        xor edi, edi
+        mov di,  ABAddr1
+        shl ebx, 1
+        add edi, ebx
+        mov dx,  ds:[edi]
+
+        add dx,  ATA_DHR
+
+        push eax
+
+        shr eax, 24
+        and al,  00001111b
+        or  al,  11100000b
+
+        out dx,  al
+
+        inc dx
+
+        call .delay400
+
+        dec dx
+        dec dx
+
+        pop  eax
+        push eax
+
+        shr eax, 16
+
+        out dx,  al
+
+        pop  eax
+        push eax
+
+        shr eax, 8
+        dec dx
+
+        out dx,  al
+
+        pop  eax
+
+        dec dx
+
+        out dx,  al
+
+        mov eax, ecx
+        dec dx
+
+        out dx,  al
+
+        add dx,  ATA_CR-2
+        mov al,  ATA_READ
+
+        out dx, al
+
+        call .ATA.waitUntilDone
+        jc .writeSectors.ATA.error
+
+        sub dx, 7
+        shl ecx, 7
+
+        push es
+
+        push edx
+        mov dx, fs
+        mov es, dx
+        pop edx
+
+        rep outsd
+
+        pop es
+
+        jmp .writeSectors.ATA.done
+
+        .writeSectors.secondDisk:
+
+        shr ebx, 1
+
+        mov edi, ADA1
+        add edi, ebx
+
+        mov dl, ds:[edi]
+
+        and dl, 1111b
+
+        cmp dl, 0001b
+        jne .writeSectors.notATA
+
+        .writeSectors.secondDisk.ATA:
+
+        xor edi, edi
+        mov di,  ABAddr1
+        shl ebx, 1
+        add edi, ebx
+        mov dx,  ds:[edi]
+
+        add dx,  ATA_DHR
+
+        push eax
+
+        shr eax, 24
+        and al,  00001111b
+        or  al,  11110000b
+
+        out dx,  al
+
+        inc dx
+
+        call .delay400
+
+        dec dx
+        dec dx
+
+        pop  eax
+        push eax
+
+        shr eax, 16
+
+        out dx,  al
+
+        pop  eax
+        push eax
+
+        shr eax, 8
+        dec dx
+
+        out dx,  al
+
+        pop eax
+
+        dec dx
+
+        out dx,  al
+
+        mov eax, ecx
+        dec dx
+
+        out dx,  al
+
+        add dx,  ATA_CR-2
+        mov al,  ATA_WRITE
+
+        out dx, al
+
+        call .ATA.waitUntilDone
+        jc .writeSectors.ATA.error
+
+        sub dx, 7
+        shl ecx, 7
+
+        push es
+
+        push edx
+        mov dx, fs
+        mov ds, dx
+        pop edx
+
+        rep outsd
+
+        pop es
+
+        .writeSectors.ATA.done:
+            clc
+        .writeSectors.ATA.end:
+            pop ds
+            popa
+            ret
+
+        .writeSectors.ATA.error:
+            stc
+            jmp .writeSectors.ATA.end
+
+        .writeSectors.notATA:
+            jmp .writeSectors.ATA.error
+
+    .ATA.waitUntilDone:
+        pusha
+
+        .ATA.waitUntilDone.loop:
+            in   al, dx
+
+            test al, (ATA_ERR|ATA_DF)
+            jnz  .ATA.waitUntilDone.error
+
+            test al, ATA_BSY
+            jnz  .ATA.waitUntilDone.loop
+
+            test al, ATA_DRQ
+            jz  .ATA.waitUntilDone.loop
+
+        clc
+        popa
+        ret
+
+        .ATA.waitUntilDone.error:
+            stc
+            popa
             ret
 
     .Fail__Message: db .Error_Message-.Fail__Message-1, 10, "This device has encountered too many errors and will be skiped."
