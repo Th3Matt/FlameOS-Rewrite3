@@ -1,6 +1,7 @@
 DescriptorSectorsSize equ 3
 FSSize equ 1024*2-1
 FileDescriptorSize equ 0x1A ; 26 ; 1+15+1+1+4+4
+BootFileSize equ 0x30
 
 InfoSector:
 	dd 41045015h			         ; Correct FlFS 0.2 signature
@@ -14,13 +15,13 @@ DescriptorSectors:
     Boot.sb:			             ; First file is kernel (and second stage bootloader), linked with the sectors after boot sector.
 		db 00000101b 		         ; Flags. First bit - Present flag, second bit - Segmentation flag - does this descriptor show a segmentation table for the file (if the file is in pieces around the disk, AKA fragmented), third bit - executable bit.
 
-		db '32Boot.sb'		         ; Filename.
+		db '48Boot.sb'		         ; Filename.
 		times 15-($-Boot.sb-1) db 0  ; Padding.
 
 		db 0			             ; Emergency terminator for filename
 
 		db 00000000b		         ; Owning userID.
-		dd 0x20			             ; Size of file in sectors.
+		dd BootFileSize	             ; Size of file in sectors.
 		dd 1						 ; Starting sector
 
 	Terminal.ub:
@@ -34,6 +35,6 @@ DescriptorSectors:
 		db 00000001b
 		dd 1+3
 
-		dd 0x21+1+DescriptorSectorsSize
+		dd BootFileSize+1+1+DescriptorSectorsSize
 
 	times DescriptorSectorsSize*512-($-DescriptorSectors) db 0

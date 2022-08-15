@@ -647,15 +647,6 @@ KERNEL:
 
         ;call MemoryManager.memAllocPrint
 
-        mov eax, Prog1-0x20000
-        mov ebx, (0x08<<16) + 0x28
-        mov ecx, 0x08
-        call ProcessManager.startProcess
-
-        mov eax, 0xA00
-        mov ebx, 0x500
-        call ProcessManager.setUpTask
-
         mov ax, 0x58
         ltr ax
 
@@ -672,16 +663,40 @@ KERNEL:
 		call Print.newLine
         call FlFS.init
 
+        xor ecx, ecx
+        call ProcessManager.setLDT
+
         mov esi, Strings.Terminal-0x20000
         call FlFS.getFileNumber
+        call FlFS.getFileInfo
+        push eax
 
-        mov di, 0x08
-        mov ds, di
+        xor eax, eax
+        mov ecx, ebx
+
+        call MemoryManager.memAlloc
+
+        shl ebx, 4+4+3
+        add ebx, eax
+        xor edx, edx
+
+        call MemoryManager.createLDTEntry
+
+		pop eax
+        mov ds, si
         xor edi, edi
         call FlFS.readFile
 
 		;sti
         cli
+
+		mov eax, 0xAAAAAAAA
+		mov ebx, 0xBBBBBBBB
+		mov ecx, 0xCCCCCCCC
+		mov edx, 0xDDDDDDDD
+		mov esi, 0xEEEEEEEE
+		mov edi, 0xFFFFFFFF
+		ud1
 
 		jmp $
 
@@ -799,10 +814,12 @@ Conv:
 %include "KernelIncludes/InterruptHandlers.asm"
 
 %include "KernelIncludes/ProcessManager.asm"
+%include "KernelIncludes/MemoryManager.asm"
 
 %include "Drivers/VGA.asm"
 
-StartupText:  db (.end-$-1), "Kernel: FlameOS Starting up...", 10, "Kernel: Video driver initialised."
+StartupText:  db (.end-$-1), "Kernel: FlameOS Starting up...", 10
+			  db             "Kernel: Video driver initialised."
 	.end:
 
 IDTloaded:	  db (.end-$-1), "Kernel: IDT initialised."
@@ -818,4 +835,4 @@ IDTloaded:	  db (.end-$-1), "Kernel: IDT initialised."
 
 %include "Drivers/FLFS.asm"
 
-times 0x200*32-($-$$) db 0
+times 0x200*0x30-($-$$) db 0

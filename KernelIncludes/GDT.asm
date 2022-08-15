@@ -271,9 +271,9 @@
     mov [di], ecx
 
     add di, 4
-                    ;---------------------70       -      70         -   LDT list
-                    ;100000 - 10ffff
-    mov ax, 0x10f
+                    ;---------------------70       -      70         -   Userspace memory
+                    ;100000 - ffffffff
+    mov ax, 0xffff
     mov [di], ax
 
     add di, 2
@@ -284,7 +284,7 @@
     add di, 2
 
     xor ecx, ecx
-    mov ch, 11010000b
+    mov ch, 11011111b
     shl ecx, 8
     mov ch, 10010010b
     mov cl, 0x10

@@ -105,6 +105,10 @@ SetUpInterrupts:
     ret
 
 Exceptions:
+    .UD:
+        push dword "U"+("D"<<16)
+        call .panicScreen
+
     .DF:
         push dword "D"+("F"<<16)
         call .panicScreen
@@ -126,6 +130,8 @@ Exceptions:
         call .panicScreen
 
     .panicScreen:
+        pusha
+
         mov ax, 0x38
         mov es, ax
         mov gs, ax
@@ -171,8 +177,9 @@ Exceptions:
         loop $-5
 
         mov eax, 0x00ff0000
-        mov esi, .Exception-0x20000+4
-        mov edi, [.Exception-0x20000]
+        mov esi, .Exception-0x20000+2
+        xor edi, edi
+        mov di, [.Exception-0x20000]
         call Print.string
 
         mov ecx, 7
@@ -182,12 +189,12 @@ Exceptions:
 
         mov eax, 0x00fffffff
         ;mov edx, 800/20*(6)*21
-        mov esi, .Exception.2-0x20000+4
-        mov edi, [.Exception.2-0x20000]
+        mov esi, .Exception.2-0x20000+2
+        mov di, [.Exception.2-0x20000]
         call Print.string
 
         mov ebp, esp ; Saving Handler stack
-        add esp, 4
+        add esp, 4+32
         xor ebx, ebx
         pop bx
         xchg esp, ebp ; Using Handler stack
@@ -198,13 +205,11 @@ Exceptions:
         pop bx
         xchg esp, ebp ; Using Handler stack
         call Print.char
-        xchg esp, ebp
 
         add edx, 5
 
-        mov esi, .Exception.3-0x20000+4
-        mov edi, [.Exception.3-0x20000]
-        xchg esp, ebp ; Using Handler stack
+        mov esi, .Exception.3-0x20000+2
+        mov di, [.Exception.3-0x20000]
         call Print.string
         xchg esp, ebp
 
@@ -217,12 +222,52 @@ Exceptions:
 
         call Print.newLine
         loop $-5
-        xchg esp, ebp
 
-        add edx, 800/20*21-(800/20/2-(.Exception.end-.Exception.4-4))*21
-        mov esi, .Exception.4-0x20000+4
-        mov edi, [.Exception.4-0x20000]
-        xchg esp, ebp  ; Using Handler stack
+        mov esi, .Exception.4-0x20000+2
+        mov di, [.Exception.4-0x20000]
+        call Print.string
+
+        sub edx, 15*2+7*2+4
+        mov ecx, ss:[esp+28]
+        call Print.hex32
+
+        add edx, 8
+        mov ecx, ss:[esp+16]
+        call Print.hex32
+
+        add edx, 8
+        mov ecx, ss:[esp+24]
+        call Print.hex32
+
+        add edx, 8
+        mov ecx, ss:[esp+20]
+        call Print.hex32
+
+        mov ecx, 2
+
+        call Print.newLine
+        loop $-5
+
+        mov esi, .Exception.5-0x20000+2
+        mov di, [.Exception.5-0x20000]
+        call Print.string
+
+        sub edx, 7*2+2
+        mov ecx, ss:[esp+4]
+        call Print.hex32
+
+        add edx, 8
+        mov ecx, ss:[esp]
+        call Print.hex32
+
+        mov ecx, 10
+
+        call Print.newLine
+        loop $-5
+
+        add edx, 800/20*21-(800/20/2-(.Exception.end-.Exception.6-2))*21
+        mov esi, .Exception.6-0x20000+2
+        mov di, [.Exception.6-0x20000]
         call Print.string
         xchg esp, ebp
 
@@ -233,14 +278,21 @@ Exceptions:
 
         jmp $
 
-    .Exception:   dd (.Exception.2-.Exception-4)
+    .Exception:   dw (.Exception.2-.Exception-2)
                   db ",---EXCEPTION--------!!!"
-    .Exception.2: dd (.Exception.3-.Exception.2-4)
+
+    .Exception.2: dw (.Exception.3-.Exception.2-2)
                   db "Exception: #"
 
-    .Exception.3: dd (.Exception.4-.Exception.3-4)
+    .Exception.3: dw (.Exception.4-.Exception.3-2)
                   db "Error Code: 0x"
 
-    .Exception.4: dd (.Exception.end-.Exception.4-4)
+    .Exception.4: dw (.Exception.5-.Exception.4-2)
+                  db "EAX: 0x         EBX: 0x         ECX: 0x         EDX: 0x"
+
+    .Exception.5: dw (.Exception.6-.Exception.5-2)
+                  db "ESI: 0x         EDI: 0x"
+
+    .Exception.6: dw (.Exception.end-.Exception.6-2)
                   db "EIP:  0x"
     .Exception.end:

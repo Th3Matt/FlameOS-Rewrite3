@@ -18,7 +18,7 @@ Builds/FS.bin: FilesystemHeader.asm
 Builds/OS.bin: Builds/BL.bin Builds/KRNL.bin Builds/FS.bin
 	dd if="Builds/BL.bin" of="Builds/OS.bin" bs=512 conv=notrunc
 	dd if="Builds/KRNL.bin" of="Builds/OS.bin" bs=512 seek=1 conv=notrunc
-	dd if="Builds/FS.bin" of="Builds/OS.bin" bs=512 seek=33 conv=notrunc
+	dd if="Builds/FS.bin" of="Builds/OS.bin" bs=512 seek=49 conv=notrunc
 
 qemu: Builds/FlameOS.img
 	qemu-system-x86_64 -sdl -vga std -drive file=Builds/FlameOS.img,format=raw

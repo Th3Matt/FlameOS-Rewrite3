@@ -1,3 +1,5 @@
+FileDescriptorSize equ 0x1A
+BootFileSize equ 0x30
 
 FlFS:
     .init:
@@ -12,7 +14,7 @@ FlFS:
         mov ax, 0x10
         mov es, ax
 
-        mov eax, 0x21
+        mov eax, BootFileSize+1
         xor ebx, ebx
         mov bx, es:[EDD_DetectedDiskNumber]
         pop es
@@ -32,7 +34,7 @@ FlFS:
         xor ecx, ecx
         mov cl, fs:[5]
 
-        mov eax, 0x22
+        mov eax, BootFileSize+2
         pop ebx
         push ebx
         mov edi, 0x200
@@ -110,7 +112,7 @@ FlFS:
         pusha
         push fs
 
-        mov ecx, 0x20
+        mov ecx, FileDescriptorSize
         mul ecx
 
         mov bx, 0x88
@@ -118,7 +120,7 @@ FlFS:
         mov cl, fs:[eax+0x200]
         test cl, 00000001b
         jz .readFile.noFile
-        mov edx, fs:[eax+0x200+18]
+        mov edx, fs:[eax+0x200+22]
         mov ecx, fs:[eax+0x200+18]
         mov eax, edx
         mov ebx, fs:[0]
@@ -143,7 +145,7 @@ FlFS:
         pusha
         push fs
 
-        mov ecx, 0x20
+        mov ecx, FileDescriptorSize
         mul ecx
 
         mov bx, 0x88
@@ -151,7 +153,7 @@ FlFS:
         mov cl, fs:[eax+0x200]
         test cl, 00000001b
         jz .writeFile.noFile
-        mov edx, fs:[eax+0x200+18]
+        mov edx, fs:[eax+0x200+22]
         mov ecx, fs:[eax+0x200+18]
         mov eax, edx
         mov ebx, fs:[0]
@@ -172,22 +174,43 @@ FlFS:
             stc
             jmp .writeFile.end
 
+    .getFileInfo: ; eax - file number. Output: ebx - file size, dl - file flags.
+        push fs
+        push eax
+        mov bx, 0x88
+        mov fs, bx
+
+        mov ebx, FileDescriptorSize
+        mul ebx
+
+        mov ebx, fs:[0x200+eax+18]
+        mov dl,  fs:[0x200+eax]
+
+        pop eax
+        pop fs
+        ret
+
     .getFileNumber: ; esi - file name string (zero-terminated), ds - file name string segment. Output: eax - file number
-        pusha
+        push ebx
+        push ecx
+        push edx
+        push esi
+        push edi
         push fs
 
         mov ax, 0x88
         mov fs, ax
 
         mov edi, 0x200+1
+
         xor ebx, ebx
         mov bl, fs:[5]
         inc ebx
-        mov eax, 0x200
-        mul ebx
-        mov ebx, eax
+        shl ebx, 4+4+3
+
         xor ecx, ecx
         xor edx, edx
+        push dword 0 ; file number
 
         .getFileNumber.loop:
             test byte fs:[0x200+edx], 00000001b ; only check filename if file exists
@@ -211,15 +234,19 @@ FlFS:
             jmp .getFileNumber.loop.1
 
             .getFileNumber.next:
+                pop eax
+                inc eax
+
                 dec esi
                 sub esi, ecx
                 sub edi, ecx
                 xor ecx, ecx
 
-                add edx, 0x1A                   ; go to next file
+                add edx, FileDescriptorSize     ; go to next file
 
                 cmp edx, ebx                    ; check if end reached
                 jge .getFileNumber.noFile
+                push eax
                 jmp .getFileNumber.loop
 
         .getFileNumber.noFile:
@@ -229,11 +256,16 @@ FlFS:
         .getFileNumber.done:
             jcxz .getFileNumber.next
 
+            pop eax
             clc
 
         .getFileNumber.end:
             pop fs
-            popa
+            pop edi
+            pop esi
+            pop edx
+            pop ecx
+            pop ebx
             ret
 
     .FoundBootDiskMsg:     db .FSSignatureWrongMsg-.FoundBootDiskMsg-1,     'FlFS: Boot disk found.'
@@ -241,4 +273,4 @@ FlFS:
     .KernelFileMissingMsg: db .DiskNotFoundMsg-.KernelFileMissingMsg-1,     "FlFS: Kernel file '32Boot.sb' not found."
     .DiskNotFoundMsg:      db .end-.DiskNotFoundMsg-1,                      'FlFS: Boot disk not found.'
     .end:
-    .KernelFileName: db '32Boot.sb', 0
+    .KernelFileName: db '48Boot.sb', 0
