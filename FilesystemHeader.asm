@@ -8,6 +8,7 @@ InfoSector:
 	db 01				             ; Autorun file index
 	db DescriptorSectorsSize		 ; Ammount of file descriptor sectors
 	dd FSSize						 ; FS size in sectors
+	dw 0
 
 	times 512-($-InfoSector) db 0
 

@@ -12,8 +12,10 @@ Builds/BL.bin: Bootloader.asm
 Builds/KRNL.bin: Kernel.asm Drivers/* KernelIncludes/*
 	nasm -fbin Kernel.asm -o "Builds/KRNL.bin"
 
-Builds/FS.bin: FilesystemHeader.asm
+Builds/FS.bin: FilesystemHeader.asm FS/Term.asm
 	nasm -fbin FilesystemHeader.asm -o "Builds/FS.bin"
+	nasm -fbin FS/Term.asm -o "Builds/Term.bin"
+	dd if="Builds/Term.bin" of="Builds/FS.bin" bs=512 seek=4 conv=notrunc
 
 Builds/OS.bin: Builds/BL.bin Builds/KRNL.bin Builds/FS.bin
 	dd if="Builds/BL.bin" of="Builds/OS.bin" bs=512 conv=notrunc

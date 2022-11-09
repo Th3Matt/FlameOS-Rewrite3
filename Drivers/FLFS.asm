@@ -2,7 +2,7 @@ FileDescriptorSize equ 0x1A
 BootFileSize equ 0x30
 
 FlFS:
-    .init:
+    .init: ; ds - segment containing LDT
         pusha
         push fs
         push ds
@@ -26,18 +26,47 @@ FlFS:
         call S_ATA_PI.readSectors
         jc .init.error
 
-        mov eax, fs:[0]
 
-        cmp eax, 0x41045015
+        cmp dword fs:[0], 0x41045015
         jnz .init.error.sig
 
         xor ecx, ecx
-        mov cl, fs:[5]
+        mov cl, fs:[5] ; Saving descriptor sector amount
+
+        push ecx
+
+        shr ecx, 3
+        inc ecx
+        xor eax, eax
+
+        call MemoryManager.memAlloc
+
+        shl ecx, 9
+        dec ecx
+
+        push ecx
+        mov cx, 0x70
+        mov ds, cx
+
+        push edx
+        xor edx, edx
+        xor ecx, ecx
+        mov ebx, eax
+        add ebx, 0xfff
+
+        call MemoryManager.createLDTEntry
+        pop ecx
+        mov fs:[10], si
+
+        pop edx
+        pop ecx
+
+        mov fs, si
 
         mov eax, BootFileSize+2
         pop ebx
         push ebx
-        mov edi, 0x200
+        xor edi, edi
 
         call S_ATA_PI.readSectors
 
@@ -45,7 +74,7 @@ FlFS:
         mov ds, si
         mov si, 0x28
         mov es, si
-        mov esi, 0x200+1
+        mov esi, 1
         xor ecx, ecx
 
         .init.fileNameLoop:
@@ -117,13 +146,24 @@ FlFS:
 
         mov bx, 0x88
         mov fs, bx
-        mov cl, fs:[eax+0x200]
+
+        sldt bx
+        push bx
+        mov bx, 0x98
+        lldt bx
+
+        mov bx, fs:[10]
+        mov fs, bx
+        mov cl, fs:[eax]
         test cl, 00000001b
         jz .readFile.noFile
-        mov edx, fs:[eax+0x200+22]
-        mov ecx, fs:[eax+0x200+18]
+        mov edx, fs:[eax+22]
+        mov ecx, fs:[eax+18]
         mov eax, edx
         mov ebx, fs:[0]
+
+        pop dx
+        lldt dx
 
         mov dx, ds
         mov fs, dx
@@ -138,53 +178,26 @@ FlFS:
             ret
 
         .readFile.noFile:
+            pop bx
+            lldt bx
             stc
             jmp .readFile.end
-
-    .writeFile: ; eax - file number, esi - buffer address, ds - buffer segment
-        pusha
-        push fs
-
-        mov ecx, FileDescriptorSize
-        mul ecx
-
-        mov bx, 0x88
-        mov fs, bx
-        mov cl, fs:[eax+0x200]
-        test cl, 00000001b
-        jz .writeFile.noFile
-        mov edx, fs:[eax+0x200+22]
-        mov ecx, fs:[eax+0x200+18]
-        mov eax, edx
-        mov ebx, fs:[0]
-
-        mov dx, ds
-        mov fs, dx
-
-        call S_ATA_PI.writeSectors
-
-        clc
-
-        .writeFile.end:
-            pop fs
-            popa
-            ret
-
-        .writeFile.noFile:
-            stc
-            jmp .writeFile.end
 
     .getFileInfo: ; eax - file number. Output: ebx - file size, dl - file flags.
         push fs
         push eax
         mov bx, 0x88
         mov fs, bx
+        mov bx, fs:[10]
+        mov fs, bx
 
         mov ebx, FileDescriptorSize
         mul ebx
-
-        mov ebx, fs:[0x200+eax+18]
-        mov dl,  fs:[0x200+eax]
+        mov ebx, fs:[eax+18]
+        xor ecx, ecx
+        mov cl,  fs:[eax+17]
+        xor edx, edx
+        mov dl,  fs:[eax]
 
         pop eax
         pop fs
@@ -200,8 +213,10 @@ FlFS:
 
         mov ax, 0x88
         mov fs, ax
+        mov ax, fs:[10]
+        mov fs, ax
 
-        mov edi, 0x200+1
+        mov edi, 1
 
         xor ebx, ebx
         mov bl, fs:[5]
@@ -213,7 +228,10 @@ FlFS:
         push dword 0 ; file number
 
         .getFileNumber.loop:
-            test byte fs:[0x200+edx], 00000001b ; only check filename if file exists
+            cmp edx, 512*3
+            jge .getFileNumber.noFile
+
+            test byte fs:[edx], 00000001b ; only check filename if file exists
             jz .getFileNumber.next
 
         .getFileNumber.loop.1:
@@ -245,12 +263,13 @@ FlFS:
                 add edx, FileDescriptorSize     ; go to next file
 
                 cmp edx, ebx                    ; check if end reached
-                jge .getFileNumber.noFile
                 push eax
+                jge .getFileNumber.noFile
                 jmp .getFileNumber.loop
 
         .getFileNumber.noFile:
             stc
+            pop eax
             jmp .getFileNumber.end
 
         .getFileNumber.done:

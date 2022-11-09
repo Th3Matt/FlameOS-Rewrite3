@@ -43,12 +43,58 @@ ProcessManager:
 		pop es
 		ret
 
-	.startProcess:	; eax - EIP, bx - CS, ebx>>16 - SS, cx - SS0. Output: ecx - Process ID
-		push es
+    .findNextFreeProcessSlot: ; Output: ecx - Slot ID
+        push es
 		push edi
 
-		push ecx
 		push ebx
+		push eax
+
+		xor edi, edi
+		mov ax, 0x40
+		mov es, ax
+		mov eax, [es:edi]
+		xor ecx, ecx
+		inc ecx
+		mov ebx, 1
+
+		.findNextFreeProcessSlot.searchForSlot:
+			test eax, ebx
+			jz .findNextFreeProcessSlot.slotFound
+
+			inc ecx
+			shl ebx, 1
+
+			cmp ecx, 32
+			jg .findNextFreeProcessSlot.slotNotFound
+			jmp .findNextFreeProcessSlot.searchForSlot
+
+        .findNextFreeProcessSlot.slotFound:
+            clc
+
+            pop eax
+            pop ebx
+
+            pop edi
+            pop es
+            ret
+
+        .findNextFreeProcessSlot.slotNotFound:
+            stc
+
+            pop eax
+            pop ebx
+
+            pop edi
+            pop es
+            ret
+
+
+	.startProcess:	; eax - User ID. Output: ecx - Process ID
+		push es
+		push edi
+		push ebx
+
 		push eax
 
 		xor edi, edi
@@ -77,17 +123,14 @@ ProcessManager:
 			mov eax, ecx
 			shl eax, 4
 
-			mov [es:eax+0x20+0xc], ecx
-
 			pop ebx ; pop eax
 			mov [es:eax+0x20], ebx
-			pop ebx ; pop ebx
-			mov [es:eax+0x20+0x4], ebx
-			pop ebx ; pop ecx
-			mov [es:eax+0x20+0x8], ebx
+			mov dword [es:eax+0x20+0x4], 0
+			mov dword [es:eax+0x20+0x8], 0
 			
             inc dword [es:0xc]
 
+            pop ebx
             pop edi
 			pop es
 
@@ -99,6 +142,8 @@ ProcessManager:
             pop ebx
             pop ecx
 
+            pop ebx
+            pop edi
             pop es
             stc
             ret
@@ -148,7 +193,7 @@ ProcessManager:
         mov di, 0x60               ; preparing to write to GDT
         mov fs, di
         mov edi, ecx
-        shr edi, 3+4+4 ; *0x800
+        shl edi, 3+4+4 ; *0x800
 
         mov eax, edi
         add eax, 0x100000
@@ -181,7 +226,7 @@ ProcessManager:
         pop eax
         ret
 
-    .setUpTask: ; eax - ESP0, ebx - ESP, ecx - Process ID
+    .setUpTask: ; eax - ESP0, ebx - ESP, ecx - Process ID, edx - EIP, esi - CS+(SS<<16), edi - SS0
         push ds
         push es
         push fs
@@ -190,6 +235,9 @@ ProcessManager:
 
         push ebx
         push eax
+
+        push edi
+        push esi
 
         push ecx
 
@@ -250,15 +298,14 @@ ProcessManager:
         pop ecx
         shl ecx, 4
 
-        mov eax, [ds:ecx+0x20]
-        mov [es:0x20], eax
+        mov [es:0x20], edx
 
-        mov eax, [ds:ecx+0x20+4]
+        pop eax ; pop esi
         mov [es:0x4C], ax
         shr eax, 16
         mov [es:0x50], ax
 
-        mov eax, [ds:ecx+0x20+8]
+        pop eax ; pop edi
         mov [es:0x08], ax
 
         pop eax

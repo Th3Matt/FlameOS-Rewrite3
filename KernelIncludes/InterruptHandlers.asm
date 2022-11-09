@@ -53,6 +53,13 @@ SetUpInterrupts:
     mov ax, 0x20
     mov ds, ax
 
+    mov eax, Exceptions.UD-0x20000
+    mov bh, 10001110b ; DPL 0, Interrupt Gate
+    mov ecx, 0x6
+    mov edx, 0x28 ; Kernel code
+
+    call IDT.modEntry
+
     mov eax, Exceptions.DF-0x20000
     mov bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0x8

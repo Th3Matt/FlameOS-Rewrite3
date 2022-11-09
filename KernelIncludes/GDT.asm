@@ -350,6 +350,46 @@
     ;mov cl, 0x0
     mov [di], ecx
 
+    add di, 4
+                    ;---------------------90       -      90         -   VFS Data
+                    ;c000 - cfff
+    mov ax, 0xcfff
+    mov [di], ax
+
+    add di, 2
+
+    mov ax, 0xc000
+    mov [di], ax
+
+    add di, 2
+
+    xor ecx, ecx
+    mov ch, 01010000b
+    shl ecx, 8
+    mov ch, 10010010b
+    ;mov cl, 0x0
+    mov [di], ecx
+
+    add di, 4
+                    ;---------------------98       -      98         -   System LDT
+                    ;100000-100fff
+    mov bx, 0x100
+    mov [di], bx
+
+    add di, 2
+
+    xor eax, eax
+    mov [di], ax
+
+    add di, 2
+
+    xor ecx, ecx
+    mov ch, 01010000b
+    shl ecx, 8
+    mov ch, 10000010b
+    mov cl, 0x10
+    mov [di], ecx
+
     add di, 4       ;=====================
 
     mov si, di

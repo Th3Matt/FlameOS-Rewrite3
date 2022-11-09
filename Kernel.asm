@@ -661,43 +661,57 @@ KERNEL:
 		call EDDV3Read
 
 		call Print.newLine
-        call FlFS.init
 
         xor ecx, ecx
         call ProcessManager.setLDT
+        call FlFS.init
 
+        mov ax, 0x88
+        mov fs, ax
         mov esi, Strings.Terminal-0x20000
         call FlFS.getFileNumber
+        jc NoBootFile
+        cmp al, fs:[4]
+        jnz NoBootFile
         call FlFS.getFileInfo
         push eax
 
+        push ds
+        mov ax, 0x70
+        mov ds, ax
         xor eax, eax
         mov ecx, ebx
 
         call MemoryManager.memAlloc
+        push eax ; saving allocation address
+        xor eax, eax
+
+        call ProcessManager.startProcess
 
         shl ebx, 4+4+3
+        pop eax
         add ebx, eax
+        dec ebx
         xor edx, edx
 
         call MemoryManager.createLDTEntry
 
+        pop ds
 		pop eax
+
+        mov ecx, 1
+        call ProcessManager.setLDT
+
         mov ds, si
         xor edi, edi
         call FlFS.readFile
 
-		;sti
-        cli
 
-		mov eax, 0xAAAAAAAA
-		mov ebx, 0xBBBBBBBB
-		mov ecx, 0xCCCCCCCC
-		mov edx, 0xDDDDDDDD
-		mov esi, 0xEEEEEEEE
-		mov edi, 0xFFFFFFFF
-		ud1
+        xor eax, eax
+		mov ebx, ecx
+        call ProgramLoader.exec
 
+		sti
 		jmp $
 
 Strings:
@@ -705,6 +719,27 @@ Strings:
 		db 'Terminal.ub', 0
 
 %include "KernelIncludes/EDD.asm"
+
+TestException:
+	mov eax, 0xAAAAAAAA
+	mov ebx, 0xBBBBBBBB
+	mov ecx, 0xCCCCCCCC
+	mov edx, 0xDDDDDDDD
+	mov esi, 0xEEEEEEEE
+	mov edi, 0xFFFFFFFF
+	ud1
+
+NoBootFile:
+	mov eax, 0x00FF0000
+	mov esi, .msg-0x20000+1
+	mov di, [.msg-0x20000]
+	and di, 0xff
+
+	call Print.string
+	jmp $
+
+	.msg: db .end-.msg, "Boot file missing."
+	.end:
 
 PCITest:
 	call PCIDriver.printDeviceTable
@@ -834,5 +869,7 @@ IDTloaded:	  db (.end-$-1), "Kernel: IDT initialised."
 %include "Drivers/VFS.asm"
 
 %include "Drivers/FLFS.asm"
+
+%include "KernelIncludes/ProgramLoader.asm"
 
 times 0x200*0x30-($-$$) db 0

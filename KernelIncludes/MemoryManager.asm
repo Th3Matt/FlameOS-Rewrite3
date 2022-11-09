@@ -16,25 +16,32 @@ MemoryManager:
 
 		rep stosd
 
+		mov ax, 0x70
+		mov es, ax
+
+		xor edi, edi
+		xor eax, eax
+		mov ecx, 256*32*32
+
+		rep stosd
+
 		pop es
 		popa
 		ret
 
-    .createLDTEntry: ; eax - base, ebx - limit, edx - cpu ring. Output: esi - LDT entry.
+    .createLDTEntry: ; eax - base, ebx - limit, ecx - Process ID, edx - cpu ring, ds - writable segment containing LDT. Output: esi - LDT entry.
         push eax
         push ebx
         push ecx
         push edx
-        push ds
 
         and dx, 11b
         shl dx, 5
         push edx
 
-        mov dx, 0x70
-        mov ds, dx
-
         xor esi, esi
+        shl ecx, 3+8
+        add esi, ecx
         sub esi, 8
 
         .createLDTEntry.loop: ; Finding free LDT entry
@@ -43,12 +50,6 @@ MemoryManager:
             jnz .createLDTEntry.loop
 
         shr ebx, 12
-        test ebx, 11111111b
-        jz .createLDTEntry.zero
-
-        dec ebx
-
-        .createLDTEntry.zero:
 
         mov [ds:esi], bx
 
@@ -74,23 +75,20 @@ MemoryManager:
         mov cl, al
         mov [ds:esi], ecx
 
-        pop ds
+        and esi, 0xff
+
         pop edx
         pop ecx
         pop ebx
         pop eax
         ret
 
-    .deleteLDTEntry: ; esi - LDT entry.
-        push edx
-        push ds
 
-        mov dx, 0x70
-        mov ds, dx
+    .deleteLDTEntry: ; esi - LDT entry, ds - writable segment containing LDT.
+        push edx
 
         and byte [ds:esi+6], 0
 
-        pop ds
         pop edx
         ret
 
@@ -204,6 +202,22 @@ MemoryManager:
             mov ecx, 800*600
             mov eax, 0xff880000
             rep stosd
+
+            mov si, 0x28
+            mov ds, si
+            mov eax, 0x00FFFFFF
+            mov esi, .outOfMemoryErrorMsg-0x20000+1
+            mov edi, [.outOfMemoryErrorMsg-0x20000]
+            and edi, 0xff
+
+            mov edx, (800/20)*580+(800/20)
+            push edi
+            shr edi, 1
+            sub edx, edi
+            pop edi
+
+            call Print.string
+
             jmp $
 
     .memFreeAll:  ; eax - process ID ; Note: frees all memory taken by process with PID
@@ -405,3 +419,6 @@ MemoryManager:
     .memTableEnd: db .memTable.end-.memTableEnd-1
         db "|--------------------------------------|", 10
     .memTable.end:
+    .outOfMemoryErrorMsg: db .end-.outOfMemoryErrorMsg-1
+        db "OUT OF MEMORY, so that sucks, I guess."
+    .end:
