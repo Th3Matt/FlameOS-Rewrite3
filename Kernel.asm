@@ -683,7 +683,6 @@ KERNEL:
         mov ecx, ebx
 
         call MemoryManager.memAlloc
-
         push eax ; saving allocation address
         xor eax, eax
 

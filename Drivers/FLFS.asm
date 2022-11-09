@@ -26,6 +26,7 @@ FlFS:
         call S_ATA_PI.readSectors
         jc .init.error
 
+
         cmp dword fs:[0], 0x41045015
         jnz .init.error.sig
 
@@ -192,7 +193,6 @@ FlFS:
 
         mov ebx, FileDescriptorSize
         mul ebx
-
         mov ebx, fs:[eax+18]
         xor ecx, ecx
         mov cl,  fs:[eax+17]

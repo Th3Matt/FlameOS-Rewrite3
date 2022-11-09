@@ -83,6 +83,7 @@ MemoryManager:
         pop eax
         ret
 
+
     .deleteLDTEntry: ; esi - LDT entry, ds - writable segment containing LDT.
         push edx
 
@@ -418,8 +419,6 @@ MemoryManager:
     .memTableEnd: db .memTable.end-.memTableEnd-1
         db "|--------------------------------------|", 10
     .memTable.end:
-
     .outOfMemoryErrorMsg: db .end-.outOfMemoryErrorMsg-1
         db "OUT OF MEMORY, so that sucks, I guess."
     .end:
-
