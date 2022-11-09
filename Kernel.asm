@@ -11,9 +11,131 @@ KernelInit16:
 	mov ax, 0xB800
 	mov gs, ax
 
+CustomSettings:
 	xor di, di
 	mov cx, 80*25*2/4
+	.clearScreen:
+		mov dword [gs:di], 0
+		add di, 4
+		loop .clearScreen
 
+	xor di, di
+	mov si, CustomSettingsMsg-a&0xFFFF
+	mov ax, 0x2000
+	mov es, ax
+	mov ah, 0x0F
+	mov word [CustomSetting+Vars], 0
+
+	call PrintLine16
+
+	sti
+
+	.waitForInput:
+		mov ah, 1
+		int 0x16							; Waiting for input
+		jz .waitForInput
+
+		mov ah, 0
+		int 0x16
+
+		cmp ah, 0x1C 						; Check selection if Enter button pressed
+		je .test
+
+		cmp al, 0x6E ; n
+		je .waitForInput.1
+
+		cmp al, 0x79 ; y
+		je .waitForInput.1
+		jmp .waitForInput
+
+		.waitForInput.1:
+		mov ah, 0x0F
+		mov [gs:((80*23)+(80/2))*2], ax 	; Writing
+		jmp .waitForInput
+
+	.test:
+		mov ax, [gs:((80*23)+(80/2))*2]
+		cmp al, 0x79
+		jnz SelectVideoMode
+		xor bx, bx
+
+	xor di, di
+	mov cx, 80*25*2/4
+	.clearScreen2:
+		mov dword [gs:di], 0
+		add di, 4
+		loop .clearScreen2
+
+	xor di, di
+	mov si, CustomSettingsMsg2-a&0xFFFF
+	mov ax, 0x2000
+	mov es, ax
+	mov ah, 0x0F
+
+	call PrintLine16
+
+	.setSettings:
+		mov ah, 1
+		int 0x16							; Waiting for input
+		jz .setSettings
+
+		mov ah, 0
+		push bx
+		int 0x16
+		pop bx
+
+		cmp ah, 0x1C 						; Check selection if Enter button pressed
+		je .exit
+
+		cmp al, 0x08 						; Check selection if backspace button pressed
+		je .backspace
+
+		cmp al, 0x6E ; n
+		je .setSettings.1
+
+		cmp al, 0x79 ; y
+		je .setSettings.1
+		jmp .setSettings
+
+		.setSettings.1:
+		mov ah, 0x0F
+		mov word [gs:bx+17*2], ax 	; Writing
+		inc bx
+		inc bx
+		jmp .setSettings
+
+	.backspace:
+		cmp bx, 0
+		jz .setSettings
+		dec bx
+		dec bx
+		xor ax, ax
+		mov word [gs:bx+17*2], ax
+		jmp .setSettings
+
+	.exit:
+		xor cx, cx
+		.exit.loop:
+			mov ax, [gs:bx+17*2-2]
+
+			cmp bx, 0
+			jz .end
+
+			dec bx
+			dec bx
+
+			shl cx, 1
+			cmp al, 0x79
+			jnz .exit.loop
+			or cx, 1
+
+			jmp .exit.loop
+	.end:
+		mov [CustomSetting+Vars], cx
+
+SelectVideoMode:
+	xor di, di
+	mov cx, 80*25*2/4
 	.clearScreen:
 		mov dword [gs:di], 0
 		add di, 4
@@ -39,17 +161,14 @@ KernelInit16:
 	jc .noBGA
 
 	or dl, 00001000b							; BGA graphics card found
-	jmp SelectVideoMode
 
 	.noBGA:
-
-SelectVideoMode:
 	mov si, SelectVideoModeMsg
 	mov ax, 2000h
 	mov es, ax
 
 	.setRecomended:								; Setting video driver recommendation
-		mov [Vars+0], dl
+		mov ds:[Vars+VideoHardwareInterfaces], dl
 		test dl, 00001000b
 		jz .notBochs
 
@@ -129,7 +248,7 @@ SelectVideoMode:
 			int 0x16
 
 			cmp ah, 0x1C 						; Check selection if Enter button pressed
-			je .testSecection
+			je .testSelection
 
 			cmp al, 0x30						; Check if number (lower bound)
 			jl .waitForInput
@@ -152,7 +271,7 @@ SelectVideoMode:
 				mov byte [gs:((80*23)+(80/2))*2+1], 0x40
 				jmp .printEnd
 
-			.testSecection:
+			.testSelection:
 				mov ah, [gs:((80*23)+(80/2))*2]
 				cmp ah, 0
 				jz .waitForInput
@@ -173,7 +292,7 @@ SelectVideoMode:
 				cmp edx, "VGAH"
 				jne .done
 
-				mov dword [GraphicsFramebufferAddress], 0xA0000
+				mov dword [Vars+GraphicsFramebufferAddress], 0xA0000
 
 				jmp .done
 
@@ -181,9 +300,9 @@ SelectVideoMode:
 				xor ax, ax
 				mov es, ax
 				mov eax, [es:0x6500+0x28]
-				mov [GraphicsFramebufferAddress], eax
+				mov [Vars+GraphicsFramebufferAddress], eax
 
-				mov bx, [VESAMode]
+				mov bx, [Vars+VESAMode]
 				or bh, 01000000b
 				mov ax, 0x4F02
 
@@ -192,8 +311,8 @@ SelectVideoMode:
 				cmp ax, 0x004F
 				jne .error
 
-				mov dword [ScreenWidth], 800
-				mov dword [ScreenHeight], 600
+				mov dword [Vars+ScreenWidth], 800
+				mov dword [Vars+ScreenHeight], 600
 
 			.done:
 
@@ -203,16 +322,23 @@ SelectVideoMode:
 Selection: db 'VGAH'
 		   dd 0
 		   dd 0
+CustomSettingsMsg:		 db 'Do you want to set debug settings? Press [n] if no.', 0
+CustomSettingsMsg2:		 db 'Custom settings: ', 0
 SelectVideoModeMsg: 	 db 'Select a video driver. Recomended video mode is: VGAH_', 0
                          db '  1. VGA Hardware Driver (VGAH_)', 0
 VideoModeSelectionVBE:	 db '  2. Video BIOS Extentions 2.0+ (VBE2+)', 0
 VideoModeSelectionBochs: db '  #. Bochs Graphics Adaptor (BOCHS)', 0
 
-GraphicsCardAddress equ Vars+0x5
-GraphicsFramebufferAddress equ Vars+0x9
-ScreenWidth equ Vars+0xD
-ScreenHeight equ Vars+0x11
-VESAMode equ Vars+0x16					; VESA mode for 800x600x32bpp
+GraphicsCardAddress equ 0x5
+GraphicsFramebufferAddress equ 0x9
+ScreenWidth equ 0xD
+ScreenHeight equ 0x11
+VESAMode equ 0x16							; VESA mode for 800x600x32bpp
+VideoHardwareInterfaces equ 0x18
+CustomSetting equ 0x80 						; First two bits control the detection of disks on ATA buses 0 and 1
+DiskDriverVariableSpace equ 0x100;+Vars
+PCIDriverVariableSpace equ 0x150;+Vars
+
 
 CheckForVBE2:
 	xor ax, ax
@@ -268,7 +394,7 @@ SetUpVBE2:
 		jz .loop
 
 	.end:
-		mov [es:VESAMode], cx
+		mov [es:Vars+VESAMode], cx
 		clc
 		ret
 
@@ -333,7 +459,7 @@ CheckBGACard:
 	.done:
 		pop eax
 
-		mov [GraphicsCardAddress], eax			; Save BGA device and function number
+		mov [Vars+GraphicsCardAddress], eax			; Save BGA device and function number
 		or eax, 10h
 
 		out dx, eax
@@ -342,7 +468,7 @@ CheckBGACard:
 
 		in eax, dx
 		and al, 0xF0
-		mov [GraphicsFramebufferAddress], eax	; Save BGA graphics card BAR0
+		mov [Vars+GraphicsFramebufferAddress], eax	; Save BGA graphics card BAR0
 
 		pop dx
 		clc
@@ -521,23 +647,105 @@ KERNEL:
 
         ;call MemoryManager.memAllocPrint
 
-        mov eax, Prog1-0x20000
-        mov ebx, (0x08<<16) + 0x28
-        mov ecx, 0x08
-        call ProcessManager.startProcess
-
-        mov eax, 0xA00
-        mov ebx, 0x500
-        call ProcessManager.setUpTask
-
         mov ax, 0x58
         ltr ax
 
         ;call MemoryManager.memAllocPrint
 
-        sti
+        call PCIDriver.detectDevices
 
+        test byte es:[CustomSetting], 100b
+        jnz PCITest
+
+		call S_ATA_PI.detectDevices
+		call EDDV3Read
+
+		call Print.newLine
+
+        xor ecx, ecx
+        call ProcessManager.setLDT
+        call FlFS.init
+
+        mov ax, 0x88
+        mov fs, ax
+        mov esi, Strings.Terminal-0x20000
+        call FlFS.getFileNumber
+        jc NoBootFile
+        cmp al, fs:[4]
+        jnz NoBootFile
+        call FlFS.getFileInfo
+        push eax
+
+        push ds
+        mov ax, 0x70
+        mov ds, ax
+        xor eax, eax
+        mov ecx, ebx
+
+        call MemoryManager.memAlloc
+
+        push eax ; saving allocation address
+        xor eax, eax
+
+        call ProcessManager.startProcess
+
+        shl ebx, 4+4+3
+        pop eax
+        add ebx, eax
+        dec ebx
+        xor edx, edx
+
+        call MemoryManager.createLDTEntry
+
+        pop ds
+		pop eax
+
+        mov ecx, 1
+        call ProcessManager.setLDT
+
+        mov ds, si
+        xor edi, edi
+        call FlFS.readFile
+
+
+        xor eax, eax
+		mov ebx, ecx
+        call ProgramLoader.exec
+
+		sti
 		jmp $
+
+Strings:
+	.Terminal:
+		db 'Terminal.ub', 0
+
+%include "KernelIncludes/EDD.asm"
+
+TestException:
+	mov eax, 0xAAAAAAAA
+	mov ebx, 0xBBBBBBBB
+	mov ecx, 0xCCCCCCCC
+	mov edx, 0xDDDDDDDD
+	mov esi, 0xEEEEEEEE
+	mov edi, 0xFFFFFFFF
+	ud1
+
+NoBootFile:
+	mov eax, 0x00FF0000
+	mov esi, .msg-0x20000+1
+	mov di, [.msg-0x20000]
+	and di, 0xff
+
+	call Print.string
+	jmp $
+
+	.msg: db .end-.msg, "Boot file missing."
+	.end:
+
+PCITest:
+	call PCIDriver.printDeviceTable
+
+	jmp $
 
 Prog1:
     mov eax, 0x00ffffff
@@ -642,13 +850,27 @@ Conv:
 %include "KernelIncludes/InterruptHandlers.asm"
 
 %include "KernelIncludes/ProcessManager.asm"
+%include "KernelIncludes/MemoryManager.asm"
 
 %include "Drivers/VGA.asm"
 
-StartupText:  db (.end-$-1), "FlameOS Starting up...", 10, "Video driver initialised."
+StartupText:  db (.end-$-1), "Kernel: FlameOS Starting up...", 10
+			  db             "Kernel: Video driver initialised."
 	.end:
 
-IDTloaded:	  db (.end-$-1), "IDT initialised."
+IDTloaded:	  db (.end-$-1), "Kernel: IDT initialised."
 	.end:
 
 %include "KernelIncludes/Glyphs.asm"
+
+%include "Drivers/ATA.asm"
+
+%include "Drivers/PCI.asm"
+
+%include "Drivers/VFS.asm"
+
+%include "Drivers/FLFS.asm"
+
+%include "KernelIncludes/ProgramLoader.asm"
+
+times 0x200*0x30-($-$$) db 0

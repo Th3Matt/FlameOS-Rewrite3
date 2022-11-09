@@ -17,37 +17,70 @@ Boot:
 	sti
 
 	mov ds:[SVO], dl
-	mov di, MMO
+	mov ah, 0x48
+	mov si, 0x500
+	mov word ds:[si], 42h
+	mov word ds:[si+0x1E], 0
 
-	push dword 0
+	int 0x13
+
+	jnc .diskInfoCheckDone
+
+	mov ax, 0xB800
+	mov es, ax
+	xor di, di
+	mov word es:[di], (0xCF<<8)+"0"	; Error 0 - Unable to get boot disk info.
+
+	jmp $
+
+	.diskInfoCheckDone:
+
+	;jmp .A20
+
+	mov di, MMO+3
 
 	.getMemoryMap:
-		mov eax, 0xE820
-		mov edx, 'SMAP'
 		xor ebx, ebx
-		mov ecx, 0x100
+		mov eax, 0xE820
+		mov edx, 'PAMS'
+		mov ecx, 0x10
+		mov word es:[di+20], 1
 
-		;int 0x15
+		int 0x15
 
-		jnc .MMTest
+		jnc .getMemoryMap.MMTest
 
-		mov ax, 0xB800
-		mov es, ax
-		xor di, di
-		mov byte es:[di], 0x41	; Error A - Unable to get memory map.
-		mov byte es:[di+1], ah
+		.getMemoryMap.error:
+			mov ax, 0xB800
+			mov es, ax
+			xor di, di
+			mov word es:[di], 0xCF41	; Error A - Unable to get memory map.
 
-		jmp $
+			jmp $
 
-		.MMTest:
-			pop eax
-			add eax, ecx
+		.getMemoryMap.MMTest:
+			mov es:[di-3], cl
+
+		.getMemoryMap.MMTest.1:
+
+			add di, cx
+			mov word es:[di+20], 1
+
+			cmp eax, 'PAMS'
+			jne .getMemoryMap.error
+
+			mov edx, eax
+			mov eax, 0xE820
+
+			int 0x15
+			jc .getMemoryMap.MMDone
+
 			cmp ebx, 0
-			jz .MMDone
-			mov di, bx
-			jmp .getMemoryMap
+			jz .getMemoryMap.MMDone
+			jmp .getMemoryMap.MMTest.1
 
-		.MMDone:
+		.getMemoryMap.MMDone:
+			mov es:[di-2], di
 	.A20:
 		mov ax, 0x2402
 		int 0x15
@@ -89,7 +122,7 @@ Boot:
     	    mov dh, 0
     	    mov dl, ds:[SVO]
         	
-        	mov al, 40
+        	mov al, 48
         	push ax
     	    mov ah, 0x02
     	    mov bx, 0x2000
@@ -124,6 +157,20 @@ Boot:
 
     
 	.C: db 0x0
+times 446-($-$$) db 0
+
+PartitionTable:
+	.partition1:
+		db 0x80 ;Bootable
+		db 0xFF ;Filler values, I don't care enough to populate those fields
+		db 0xFF
+		db 0xFF
+		db 0xC8 ;I'm pretty sure this partition ID is (mostly) unused
+		db 0xFF
+		db 0xFF
+		db 0xFF
+		dd 0x00000001
+		dd 0x00000800+1
 
 times 510-($-$$) db 0
 

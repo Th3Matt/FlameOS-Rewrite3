@@ -43,11 +43,10 @@ ProcessManager:
 		pop es
 		ret
 
-	.startProcess:	; eax - EIP, bx - CS, ebx>>16 - SS, cx - SS0. Output: ecx - Process ID
-		push es
+    .findNextFreeProcessSlot: ; Output: ecx - Slot ID
+        push es
 		push edi
 
-		push ecx
 		push ebx
 		push eax
 
@@ -55,7 +54,55 @@ ProcessManager:
 		mov ax, 0x40
 		mov es, ax
 		mov eax, [es:edi]
-		xor ecx, ecx 
+		xor ecx, ecx
+		inc ecx
+		mov ebx, 1
+
+		.findNextFreeProcessSlot.searchForSlot:
+			test eax, ebx
+			jz .findNextFreeProcessSlot.slotFound
+
+			inc ecx
+			shl ebx, 1
+
+			cmp ecx, 32
+			jg .findNextFreeProcessSlot.slotNotFound
+			jmp .findNextFreeProcessSlot.searchForSlot
+
+        .findNextFreeProcessSlot.slotFound:
+            clc
+
+            pop eax
+            pop ebx
+
+            pop edi
+            pop es
+            ret
+
+        .findNextFreeProcessSlot.slotNotFound:
+            stc
+
+            pop eax
+            pop ebx
+
+            pop edi
+            pop es
+            ret
+
+
+	.startProcess:	; eax - User ID. Output: ecx - Process ID
+		push es
+		push edi
+		push ebx
+
+		push eax
+
+		xor edi, edi
+		mov ax, 0x40
+		mov es, ax
+		mov eax, [es:edi]
+		xor ecx, ecx
+		inc ecx
 		mov ebx, 1
 
 		.startProcess.searchForSlot:
@@ -76,17 +123,14 @@ ProcessManager:
 			mov eax, ecx
 			shl eax, 4
 
-			mov [es:eax+0x20+0xc], ecx
-
 			pop ebx ; pop eax
 			mov [es:eax+0x20], ebx
-			pop ebx ; pop ebx
-			mov [es:eax+0x20+0x4], ebx
-			pop ebx ; pop ecx
-			mov [es:eax+0x20+0x8], ebx
+			mov dword [es:eax+0x20+0x4], 0
+			mov dword [es:eax+0x20+0x8], 0
 			
             inc dword [es:0xc]
 
+            pop ebx
             pop edi
 			pop es
 
@@ -98,6 +142,8 @@ ProcessManager:
             pop ebx
             pop ecx
 
+            pop ebx
+            pop edi
             pop es
             stc
             ret
@@ -107,6 +153,8 @@ ProcessManager:
         xor ebx, ebx
         xor edi, edi
         mov bx, 0x1
+
+        dec ecx
 
         shl ebx, cl
 
@@ -136,34 +184,17 @@ ProcessManager:
             pop ebx
             ret
 
-    .setUpTask: ; ecx - Process ID, eax - ESP0, ebx - ESP
-        push ds
-        push es
-        push fs
-        push esi
-        push edi
-
-        push ebx
+    .setLDT: ; ecx - Process ID
         push eax
-
         push ecx
-
-        mov di, 0x40
-        mov ds, di
-
-        mov di, 0x70
-        mov es, di
+        push edi
+        push fs
 
         mov di, 0x60               ; preparing to write to GDT
         mov fs, di
-
         mov edi, ecx
-        shl edi, 4
+        shl edi, 3+4+4 ; *0x800
 
-        mov edi, ecx
-        shr edi, 3+4+4 ; *0x800
-
-        push edi
         mov eax, edi
         add eax, 0x100000
 
@@ -188,6 +219,42 @@ ProcessManager:
         mov ecx, 0x68
 
         lldt cx                    ; reloading LDTR
+
+        pop fs
+        pop edi
+        pop ecx
+        pop eax
+        ret
+
+    .setUpTask: ; eax - ESP0, ebx - ESP, ecx - Process ID, edx - EIP, esi - CS+(SS<<16), edi - SS0
+        push ds
+        push es
+        push fs
+        push esi
+        push edi
+
+        push ebx
+        push eax
+
+        push edi
+        push esi
+
+        push ecx
+
+        mov di, 0x40
+        mov ds, di
+
+        mov di, 0x70
+        mov es, di
+
+        mov di, 0x60               ; preparing to write to GDT
+        mov fs, di
+
+        mov edi, ecx
+        shr edi, 3+4+4 ; *0x800
+        push edi
+
+        call .setLDT
 
         pop ecx
         mov eax, ecx
@@ -231,15 +298,14 @@ ProcessManager:
         pop ecx
         shl ecx, 4
 
-        mov eax, [ds:ecx+0x20]
-        mov [es:0x20], eax
+        mov [es:0x20], edx
 
-        mov eax, [ds:ecx+0x20+4]
+        pop eax ; pop esi
         mov [es:0x4C], ax
         shr eax, 16
         mov [es:0x50], ax
 
-        mov eax, [ds:ecx+0x20+8]
+        pop eax ; pop edi
         mov [es:0x08], ax
 
         pop eax
@@ -376,335 +442,3 @@ ProcessManager:
 
         .sheduler.return:
             ret
-
-ALLOCATABLE_SPACE_TABLE_SIZE equ 511>>2 ; ((4*1024-1)*1024-(0xffff/1024))/8/1024
-
-MemoryManager:
-    .init:
-        pusha
-        push es
-
-        mov ax, 0x78
-		mov es, ax
-
-		mov ecx, (0x8900-0x7900)/4
-		xor edi, edi
-		xor eax, eax
-
-		rep stosd
-
-		pop es
-		popa
-		ret
-
-    .memAlloc:    ; eax - process ID, ecx - requested blocks of 4 KiB. Output: eax - address of allocated space
-        push es
-        push edi
-        push edx
-        push ebx
-
-        push eax
-
-        mov ax, 0x78
-		mov es, ax
-
-		xor edi, edi
-		xor eax, eax
-		mov al, 1
-        xor edx, edx
-		jmp .memAlloc.checkSlot
-
-        .memAlloc.notFree:
-            xor edx, edx
-
-		.memAlloc.shiftMask:
-            shl eax, 1
-            jnz .memAlloc.checkSlot
-
-		.memAlloc.setTo1:
-            mov eax, 1              ; reset mask
-            inc edi
-            cmp edi, ALLOCATABLE_SPACE_TABLE_SIZE
-            jz .memAlloc.outOfMemory
-
-        .memAlloc.checkSlot:
-            test [es:edi], eax        ; check memory slot
-            jnz .memAlloc.notFree
-            inc edx
-            cmp edx, ecx
-            jnz .memAlloc.shiftMask
-
-        xor edx, edx
-
-        .memAlloc.setBits:
-            or [es:edi], eax
-            inc edx
-            shr eax, 1
-            jnz .memAlloc.setBits.2
-
-            cmp edx, ecx
-            jz .memAlloc.writeAllocation
-
-            mov eax, 80000000h
-            dec edi
-
-        .memAlloc.setBits.2:
-            cmp edx, ecx
-            jnz .memAlloc.setBits
-
-		.memAlloc.writeAllocation:
-            mov ebx, eax
-            pop eax
-            push esi
-            xor esi, esi
-
-            .memAlloc.writeAllocation.testIfWrite:
-                cmp dword [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+8], 0
-                jnz .memAlloc.nextAlloc
-
-        shl edi, 5
-
-        .memAlloc.getPosMidByte:
-            cmp ebx, 0
-            jz .memAlloc.getPosMidByte.done
-
-            inc edi
-            shr ebx, 1
-
-            jmp .memAlloc.getPosMidByte
-
-        .memAlloc.getPosMidByte.done:
-
-        mov [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE], eax              ; PID
-        mov [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+4], edi            ; Allocation location in table
-        mov [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+8], ecx            ; Allocated space
-
-        shl edi, 12
-
-        add edi, 0x110000
-        mov [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+12], edi           ; Start address of allocation
-        pop esi
-
-        mov eax, edi
-
-        .memAlloc.end:
-
-        pop ebx
-        pop edx
-        pop edi
-        pop es
-        ret
-
-        .memAlloc.nextAlloc:
-            add esi, 16
-            jmp .memAlloc.writeAllocation.testIfWrite
-
-        .memAlloc.outOfMemory:
-            mov ax, 0x38
-            mov es, ax
-            xor edi, edi
-
-            mov ecx, 800*600
-            mov eax, 0xff880000
-            rep stosd
-            jmp $
-
-    .memFreeAll:  ; eax - process ID ; Note: frees all memory taken by process with PID
-        push eax
-        push ecx
-        push es
-        push esi
-
-        mov ax, 0x78
-        mov es, ax
-
-        mov ecx, (0x1000-0x200)/16
-        xor esi, esi
-
-        .memFreeAll.loop:
-            cmp [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE], eax
-            jnz .memFreeAll.loop.1
-
-            mov ebx, [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+12]
-
-            call .memFree
-
-            .memFreeAll.loop.1:
-                add esi, 16
-                loop .memFreeAll.loop
-
-        pop edi
-        pop es
-        pop ecx
-        pop eax
-        ret
-
-    .memFree:     ; eax - process ID, ebx - allocation address.
-        push es
-        push eax
-        push esi
-        push ecx
-
-        push eax
-
-        mov ax, 0x78
-		mov es, ax
-
-        pop eax
-        mov esi, [es:ALLOCATABLE_SPACE_TABLE_SIZE]
-
-        .memFree.test:
-            cmp [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE], eax
-            jnz .memFree.nextAlloc
-            cmp [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+12], ebx
-            jnz .memFree.nextAlloc
-
-        mov ecx, [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+4]
-        mov ebx, [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+8]
-        add ecx, ebx
-
-        push ecx
-
-        mov eax, 1
-        and cl, 0x1f
-        dec ecx
-        shl eax, cl
-
-        pop ecx
-        shr ecx, 5
-
-        .memFree.clearBits:
-            xor [es:ecx], eax
-            dec ebx
-            cmp ebx, 0
-            jz .memFree.clearAllocation
-
-            shr eax, 1
-            jnz .memFree.clearBits
-
-            mov eax, 80000000h
-            dec ecx
-            jmp .memFree.clearBits
-
-        .memFree.clearAllocation:
-            mov dword [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE], 0
-            mov dword [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+4], 0
-            mov dword [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+8], 0
-            mov dword [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+12], 0
-
-        pop ecx
-        pop esi
-        pop eax
-        pop es
-        clc
-
-        .memFree.end:
-            ret
-
-        .memFree.nextAlloc:
-            add esi, 16
-
-            cmp esi, (0x1000-0x200)
-            stc
-            jz .memFree.end
-
-            jmp .memFree.test
-
-    .memAllocPrint:
-        pusha
-        push ds
-
-        push es
-        mov ax, 0x38
-        mov es, ax
-        xor edi, edi
-
-        mov ecx, 800*600
-        xor eax, eax
-        rep stosd
-        pop es
-
-        mov ax, 0x28
-        mov ds, ax
-
-        mov eax, 0xffffffff
-        xor edx, edx
-        mov esi, .memTableTop+1-0x20000
-        mov edi, [ds:esi-1]
-        shl edi, 24
-        shr edi, 24
-
-        call Print.string
-
-        push es
-        mov cx, 0x78
-        mov es, cx
-
-        mov ecx, 4
-        xor ebx, ebx
-
-        .memAllocPrint.PrintEntries:
-            call .memAllocPrint.drawEntry
-            add ebx, 16
-            loop .memAllocPrint.PrintEntries
-
-        pop es
-        pop ds
-        popa
-        ret
-
-        .memAllocPrint.drawEntry: ; ebx - entry
-            push ecx
-            mov esi, .memTableEntry+1-0x20000
-            mov edi, 4
-
-            call Print.string
-
-            mov ecx, [es:ebx+ALLOCATABLE_SPACE_TABLE_SIZE]
-
-            call Print.hex32
-
-            mov edi, 5
-            add esi, 4
-
-            call Print.string
-
-            mov ecx, [es:ebx+ALLOCATABLE_SPACE_TABLE_SIZE+12]
-
-            call Print.hex32
-
-            mov edi, 5
-            add esi, 5
-
-            call Print.string
-
-            mov ecx, [es:ebx+ALLOCATABLE_SPACE_TABLE_SIZE+8]
-
-            call Print.hex32
-
-            mov edi, 3
-            add esi, 5
-
-            call Print.string
-
-            mov esi, .memTableEnd+1-0x20000
-            mov edi, [ds:esi-1]
-            shl edi, 24
-            shr edi, 24
-
-            call Print.string
-
-            pop ecx
-            ret
-
-    .memTableTop: db .memTableEntry-.memTableTop-1
-        db "|--------------------------------------|", 10
-        db "| PID        | StartAddr  | Size       |", 10
-        db "|--------------------------------------|", 10
-
-    .memTableEntry: db .memTableEnd-.memTableEntry-1
-        db "| 0x", " | 0x", " | 0x", " |", 10
-
-    .memTableEnd: db .memTable.end-.memTableEnd-1
-        db "|--------------------------------------|", 10
-    .memTable.end:
