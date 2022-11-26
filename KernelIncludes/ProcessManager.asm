@@ -38,6 +38,9 @@ ProcessManager:
 
 		rep stosb
 
+		xor eax, eax
+		call .startProcess
+
 		pop ecx
 		pop eax
 		pop es
@@ -94,6 +97,7 @@ ProcessManager:
 		push es
 		push edi
 		push ebx
+		push eax
 
 		push eax
 
@@ -102,7 +106,6 @@ ProcessManager:
 		mov es, ax
 		mov eax, [es:edi]
 		xor ecx, ecx
-		inc ecx
 		mov ebx, 1
 
 		.startProcess.searchForSlot:
@@ -125,11 +128,13 @@ ProcessManager:
 
 			pop ebx ; pop eax
 			mov [es:eax+0x20], ebx
-			mov dword [es:eax+0x20+0x4], 0
-			mov dword [es:eax+0x20+0x8], 0
+			xor ebx, ebx
+			mov dword [es:eax+0x20+0x4], ebx
+			mov dword [es:eax+0x20+0x8], ebx
 			
             inc dword [es:0xc]
 
+            pop eax
             pop ebx
             pop edi
 			pop es
@@ -142,14 +147,97 @@ ProcessManager:
             pop ebx
             pop ecx
 
+            pop eax
             pop ebx
             pop edi
             pop es
             stc
             ret
 
+    .pauseProcess:  ; eax - reason for pausing process, ecx - Process ID
+        push ebx
+        push edi
+        push ecx
+        xor ebx, ebx
+        xor edi, edi
+        mov bx, 0x1
+
+        shl ebx, cl
+
+        push es
+        push eax
+        mov ax, 0x40
+        mov es, ax
+        pop eax
+
+        test [es:edi], ebx                  ; Checking if process exists
+        jz .pauseProcess.notStarted
+
+        shl ecx, 4
+
+        or byte [es:ecx+0x20+0x4], 1       ; Marking the process paused
+        mov dword [es:ecx+0x20+0x8], eax
+
+        clc
+        pop es
+        pop ecx
+        pop edi
+        pop ebx
+        ret
+
+        .pauseProcess.notStarted:
+            stc
+            pop es
+            pop ecx
+            pop edi
+            pop ebx
+            ret
+
+    .resumeProcess: ; ecx - Process ID
+        push ebx
+        push edi
+        push ecx
+        xor ebx, ebx
+        xor edi, edi
+        mov bx, 0x1
+
+        shl ebx, cl
+
+        not ebx
+
+        push es
+        push eax
+        mov ax, 0x40
+        mov es, ax
+        pop eax
+
+        test [es:edi], ebx                  ; Checking if process exists
+        jz .resumeProcess.notStarted
+
+        shl ecx, 4
+        mov [es:ecx+0x20], ebx
+        xor ebx, ebx
+        and byte [es:ecx+0x20+0x4], 0xFE
+        mov dword [es:ecx+0x20+0x8], ebx
+
+        clc
+        pop es
+        pop ecx
+        pop edi
+        pop ebx
+        ret
+
+        .resumeProcess.notStarted:
+            stc
+            pop es
+            pop ecx
+            pop edi
+            pop ebx
+            ret
+
     .stopProcess:   ; ecx - Process ID
         push ebx
+        push edi
         xor ebx, ebx
         xor edi, edi
         mov bx, 0x1
@@ -166,15 +254,16 @@ ProcessManager:
         mov es, ax
         pop eax
 
-        test [es:edi], ebx
+        test [es:edi], ebx                  ; Checking if process exists
         jz .stopProcess.notStarted
 
-        and [es:edi], ebx
+        xor [es:edi], ebx
 
         dec dword [es:0xc]
 
         clc
         pop es
+        pop edi
         pop ebx
         ret
 
@@ -239,20 +328,14 @@ ProcessManager:
         push edi
         push esi
 
-        push ecx
-
-        mov di, 0x40
-        mov ds, di
-
         mov di, 0x70
         mov es, di
 
-        mov di, 0x60               ; preparing to write to GDT
-        mov fs, di
-
         mov edi, ecx
-        shr edi, 3+4+4 ; *0x800
+        shl edi, 3+4+4 ; *0x800
         push edi
+
+        push ecx
 
         call .setLDT
 
@@ -271,6 +354,8 @@ ProcessManager:
 
         mov ebx, eax
         shr ebx, 12
+
+        add esi, 8*3
 
         mov [es:esi], bx
 
@@ -321,6 +406,7 @@ ProcessManager:
 
         mov di, 0x68
         mov [es:0x60], edi
+        mov dword es:[0x24], 0x0200 ; setting interrupt flag
 
         pop edi
         pop esi
@@ -333,9 +419,9 @@ ProcessManager:
     .sheduler:
         push es
 
-        mov cx, 0x48               ; preparing to read from TSS
+        mov cx, 0x48               ; preparing to read from saved TSS
         mov ds, cx
-        mov cx, 0x0+100b           ; reparing to write to saved TSS
+        mov cx, (0x8*3)+100b           ; reparing to write to saved TSS
         mov es, cx
 
         xor ecx, ecx
@@ -373,44 +459,15 @@ ProcessManager:
             jz .sheduler.return
             test [es:0], eax        ; check process slot
             jz .sheduler.shiftMask
+            mov ebx, ecx
+            shl ebx, 4
+            test byte [es:ebx+0x20+0x4], 1
+            jnz .sheduler.shiftMask
 
         push eax
         push ecx
 
-         xor eax, eax
-         ;mov al, 0x10
-         ;mul cx
-         mov ax, cx
-         ;shl ax, 5
-         ;mov ecx, [es:eax+0x20+0x10] ; reading LDT number       ; Deprecated! LDT number is now the same as process ID
-
-
-         shl eax, 4+4+3             ; getting the address of LDT
-
-         add eax, 0x100000
-         mov cx, 0x60               ; preparing to write to GDT
-         mov es, cx
-
-         mov [es:0x68+2], ax        ; writing BASE[0:15] of LDT
-
-         shr eax, 16
-
-         mov [es:0x68+4], al        ; writing BASE[16:23] of LDT
-         mov [es:0x68+7], ah        ; writing BASE[24:31] of LDT
-
-         xor ecx, ecx
-         mov cx, 0x800
-
-         add ecx, eax               ; getting the address of LDT limit
-
-         mov [es:0x68], cx          ; writing LIMIT[0:15] of LDT
-         shr ecx, 16
-         and byte [es:0x68+6], 0xf0
-         or [es:0x68+6], cl         ; writing LIMIT[16:19] of LDT
-
-         mov cx, 0x68
-
-         lldt cx                    ; reloading LDTR
+         call .setLDT
 
          mov cx, 0x48               ; preparing to write to TSS
          mov es, cx

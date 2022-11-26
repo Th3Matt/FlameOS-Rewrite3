@@ -390,6 +390,8 @@
     mov cl, 0x10
     mov [di], ecx
 
+    add di, 4
+
     add di, 4       ;=====================
 
     mov si, di

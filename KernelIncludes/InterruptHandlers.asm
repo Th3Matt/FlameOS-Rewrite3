@@ -1,6 +1,5 @@
 IRQs:
     .timerInterrupt:
-        xchg bx, bx
 
 		cmp [es:0xc], byte 0
 		jz .timerInterrupt.stopPC
@@ -25,9 +24,10 @@ IRQs:
             out 0x20, al  ; EOI
 
             iret
+            jmp .timerInterrupt ; fix for a bug with tss
 
         .timerInterrupt.stopPC:             ; No more tasks to execute, check whether to restart or shut down the computer
-            jmp $   ; Currently just stop execution
+            jmp $                           ; Currently just stop execution
 
 SetUpInterrupts:
     pusha
@@ -48,6 +48,7 @@ SetUpInterrupts:
     mov es:[0x4C], word 0x28
     mov es:[0x48], word 0x40
     mov es:[0x00], word 0x58
+    mov es:[0x60], word 0x68
 
     push ds
     mov ax, 0x20

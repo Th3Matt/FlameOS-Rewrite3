@@ -57,8 +57,8 @@ ProgramLoader:
 
     .exec: ; eax - UserID, ebx - Process ID
         push eax
-        push ebx
         push ds
+        push ebx
 
         mov ax, 0x70
         mov ds, ax
@@ -101,8 +101,16 @@ ProgramLoader:
 
         call ProcessManager.setUpTask
 
-        pop ds
+        mov bx, 0x70
+        mov ds, bx
+
         pop ebx
+        mov ecx, ebx
+        shl ecx, 3+4+4
+        add ecx, 5
+        or byte [ds:ecx], 00001000b ; Making the segment executable
+
+        pop ds
         pop eax
 
         ret

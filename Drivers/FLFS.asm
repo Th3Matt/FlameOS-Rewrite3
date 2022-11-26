@@ -6,6 +6,7 @@ FlFS:
         pusha
         push fs
         push ds
+        push edx
 
         mov ax, 0x88
         mov fs, ax
@@ -25,7 +26,6 @@ FlFS:
 
         call S_ATA_PI.readSectors
         jc .init.error
-
 
         cmp dword fs:[0], 0x41045015
         jnz .init.error.sig
@@ -100,6 +100,7 @@ FlFS:
         mov esi, .FoundBootDiskMsg-0x20000+1
         mov di, [.FoundBootDiskMsg-0x20000]
         and di, 0xff
+        pop edx
 
         call Print.string
 
@@ -193,6 +194,7 @@ FlFS:
 
         mov ebx, FileDescriptorSize
         mul ebx
+
         mov ebx, fs:[eax+18]
         xor ecx, ecx
         mov cl,  fs:[eax+17]

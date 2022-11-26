@@ -39,9 +39,8 @@ MemoryManager:
         shl dx, 5
         push edx
 
-        xor esi, esi
         shl ecx, 3+8
-        add esi, ecx
+        mov esi, ecx
         sub esi, 8
 
         .createLDTEntry.loop: ; Finding free LDT entry
@@ -82,7 +81,6 @@ MemoryManager:
         pop ebx
         pop eax
         ret
-
 
     .deleteLDTEntry: ; esi - LDT entry, ds - writable segment containing LDT.
         push edx
@@ -419,6 +417,8 @@ MemoryManager:
     .memTableEnd: db .memTable.end-.memTableEnd-1
         db "|--------------------------------------|", 10
     .memTable.end:
+
     .outOfMemoryErrorMsg: db .end-.outOfMemoryErrorMsg-1
         db "OUT OF MEMORY, so that sucks, I guess."
     .end:
+

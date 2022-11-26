@@ -614,6 +614,8 @@ KERNEL:
 		call Print.string
 
 		call ProcessManager.init
+		xor eax, eax
+        call ProcessManager.pauseProcess
 
         call MemoryManager.init
 
@@ -662,8 +664,8 @@ KERNEL:
 
 		call Print.newLine
 
-        xor ecx, ecx
-        call ProcessManager.setLDT
+        mov cx, 0x98
+        lldt cx
         call FlFS.init
 
         mov ax, 0x88
@@ -683,6 +685,7 @@ KERNEL:
         mov ecx, ebx
 
         call MemoryManager.memAlloc
+
         push eax ; saving allocation address
         xor eax, eax
 
@@ -699,7 +702,6 @@ KERNEL:
         pop ds
 		pop eax
 
-        mov ecx, 1
         call ProcessManager.setLDT
 
         mov ds, si
@@ -712,6 +714,7 @@ KERNEL:
         call ProgramLoader.exec
 
 		sti
+		hlt
 		jmp $
 
 Strings:
