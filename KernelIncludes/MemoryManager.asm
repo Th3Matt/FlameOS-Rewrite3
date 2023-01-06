@@ -213,6 +213,7 @@ MemoryManager:
             shr edi, 1
             sub edx, edi
             pop edi
+            xor ecx, ecx
 
             call Print.string
 
@@ -336,12 +337,14 @@ MemoryManager:
         mov ax, 0x28
         mov ds, ax
 
-        mov eax, 0xffffffff
+        xor eax, eax
+        not eax
         xor edx, edx
         mov esi, .memTableTop+1-0x20000
         mov edi, [ds:esi-1]
         shl edi, 24
         shr edi, 24
+        xor ecx, ecx
 
         call Print.string
 
@@ -366,6 +369,7 @@ MemoryManager:
             push ecx
             mov esi, .memTableEntry+1-0x20000
             mov edi, 4
+            xor ecx, ecx
 
             call Print.string
 
@@ -375,6 +379,7 @@ MemoryManager:
 
             mov edi, 5
             add esi, 4
+            xor ecx, ecx
 
             call Print.string
 
@@ -384,6 +389,7 @@ MemoryManager:
 
             mov edi, 5
             add esi, 5
+            xor ecx, ecx
 
             call Print.string
 
@@ -393,6 +399,7 @@ MemoryManager:
 
             mov edi, 3
             add esi, 5
+            xor ecx, ecx
 
             call Print.string
 
@@ -400,6 +407,7 @@ MemoryManager:
             mov edi, [ds:esi-1]
             shl edi, 24
             shr edi, 24
+            xor ecx, ecx
 
             call Print.string
 

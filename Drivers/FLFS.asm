@@ -102,7 +102,12 @@ FlFS:
         and di, 0xff
         pop edx
 
+        push ecx
+        xor ecx, ecx
+
         call Print.string
+
+        pop ecx
 
         pop ds
         pop fs
@@ -114,8 +119,10 @@ FlFS:
             mov esi, .DiskNotFoundMsg-0x20000+1
             mov di, [.DiskNotFoundMsg-0x20000]
             and di, 0xff
+            xor ecx, ecx
 
             call Print.string
+
             jmp $
 
         .init.error.sig:
@@ -123,6 +130,7 @@ FlFS:
             mov esi, .FSSignatureWrongMsg-0x20000+1
             mov di, [.FSSignatureWrongMsg-0x20000]
             and di, 0xff
+            xor ecx, ecx
 
             call Print.string
             jmp $
@@ -134,6 +142,7 @@ FlFS:
             mov esi, .KernelFileMissingMsg-0x20000+1
             mov di, [.KernelFileMissingMsg-0x20000]
             and di, 0xff
+            xor ecx, ecx
 
             call Print.string
             jmp $

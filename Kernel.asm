@@ -530,15 +530,10 @@ GraphicsModeSetUp:
 	.done:
 
 ClearScreen:
-	mov ecx, 800*600
-	mov ax, 0x38
+	mov ax, 0x0
 	mov gs, ax
-	xor edi, edi
 
-	.loop:
-		mov dword [gs:edi], 0
-		add edi, 4
-		loop .loop
+	call Print.clearScreen
 
 KERNEL:
 	.loading:
@@ -548,6 +543,7 @@ KERNEL:
 		mov esi, StartupText-0x20000+1
 		mov edi, edx
 		xor edx, edx
+		xor ecx, ecx
 
 		call Print.string
 
@@ -611,10 +607,13 @@ KERNEL:
 		mov edi, edx
 		pop edx
 
+		xor ecx, ecx
+
 		call Print.string
 
 		call ProcessManager.init
 		xor eax, eax
+		xor ecx, ecx
         call ProcessManager.pauseProcess
 
         call MemoryManager.init
@@ -713,6 +712,8 @@ KERNEL:
 		mov ebx, ecx
         call ProgramLoader.exec
 
+        call Print.refresh
+
 		sti
 		hlt
 		jmp $
@@ -733,10 +734,12 @@ TestException:
 	ud1
 
 NoBootFile:
-	mov eax, 0x00FF0000
+	mov ecx, 0x00FF0000
 	mov esi, .msg-0x20000+1
 	mov di, [.msg-0x20000]
 	and di, 0xff
+	xor eax, eax
+	not eax
 
 	call Print.string
 	jmp $

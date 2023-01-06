@@ -46,6 +46,7 @@ EDDV3Read:
         mov esi, .USBMessage-0x20000+1
         mov di, [.USBMessage-0x20000]
         and di, 0xff
+        xor ecx, ecx
 
         call Print.string
 
@@ -58,6 +59,7 @@ EDDV3Read:
         mov esi, .SCSIMessage-0x20000+1
         mov di, [.SCSIMessage-0x20000]
         and di, 0xff
+        xor ecx, ecx
 
         call Print.string
 
@@ -71,6 +73,7 @@ EDDV3Read:
         mov esi, .FireWireMessage-0x20000+1
         mov di, [.FireWireMessage-0x20000]
         and di, 0xff
+        xor ecx, ecx
 
         call Print.string
 
@@ -83,6 +86,7 @@ EDDV3Read:
         mov esi, .FibreMessage-0x20000+1
         mov di, [.FibreMessage-0x20000]
         and di, 0xff
+        xor ecx, ecx
 
         call Print.string
 
@@ -95,6 +99,7 @@ EDDV3Read:
         mov esi, .ATAPIMessage-0x20000+1
         mov di, [.ATAPIMessage-0x20000]
         and di, 0xff
+        xor ecx, ecx
 
         call Print.string
 

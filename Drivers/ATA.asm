@@ -156,7 +156,12 @@ S_ATA_PI:
             xor eax, eax
             not eax
 
+            push ecx
+            xor ecx, ecx
+
             call Print.string
+
+            pop ecx
 
             pop eax
             push edx
@@ -174,7 +179,12 @@ S_ATA_PI:
             xor eax, eax
             not eax
 
+            push ecx
+            xor ecx, ecx
+
             call Print.string
+
+            pop ecx
 
             pop eax
             push edx
@@ -191,7 +201,12 @@ S_ATA_PI:
             xor eax, eax
             not eax
 
+            push ecx
+            xor ecx, ecx
+
             call Print.string
+
+            pop ecx
 
             cli
             hlt
@@ -214,7 +229,12 @@ S_ATA_PI:
         mov edx, edi
         mov edi, 6
 
+        push ecx
+        xor ecx, ecx
+
         call Print.string
+
+        pop ecx
 
         push ebx
 
@@ -353,7 +373,12 @@ S_ATA_PI:
         xor eax, eax
         not eax
 
+        push ecx
+        xor ecx, ecx
+
         call Print.string
+
+        pop ecx
 
         mov edi, edx
 
@@ -382,7 +407,12 @@ S_ATA_PI:
         mov edx, edi
         mov edi, 6
 
+        push ecx
+        xor ecx, ecx
+
         call Print.string
+
+        pop ecx
 
         push ebx
 
@@ -519,7 +549,12 @@ S_ATA_PI:
         xor eax, eax
         not eax
 
+        push ecx
+        xor ecx, ecx
+
         call Print.string
+
+        pop ecx
 
         mov edi, edx
 
@@ -566,7 +601,12 @@ S_ATA_PI:
             xor eax, eax
             not eax
 
+            push ecx
+            xor ecx, ecx
+
             call Print.string
+
+            pop ecx
 
             mov edi, edx
 
@@ -596,7 +636,12 @@ S_ATA_PI:
             xor eax, eax
             not eax
 
+            push ecx
+            xor ecx, ecx
+
             call Print.string
+
+            pop ecx
 
             mov edi, edx
 
@@ -623,7 +668,12 @@ S_ATA_PI:
             xor eax, eax
             not eax
 
+            push ecx
+            xor ecx, ecx
+
             call Print.string
+
+            pop ecx
 
             mov edi, edx
 
@@ -650,7 +700,12 @@ S_ATA_PI:
             xor eax, eax
             not eax
 
+            push ecx
+            xor ecx, ecx
+
             call Print.string
+
+            pop ecx
 
             mov edi, edx
 
@@ -673,7 +728,12 @@ S_ATA_PI:
             xor eax, eax
             not eax
 
+            push ecx
+            xor ecx, ecx
+
             call Print.string
+
+            pop ecx
 
             mov edi, edx
 
@@ -694,7 +754,12 @@ S_ATA_PI:
             xor eax, eax
             not eax
 
+            push ecx
+            xor ecx, ecx
+
             call Print.string
+
+            pop ecx
 
             mov edi, edx
 

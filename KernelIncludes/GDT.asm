@@ -391,6 +391,24 @@
     mov [di], ecx
 
     add di, 4
+                    ;---------------------A0       -      A0        -   Charmap of screen
+                    ;d000 - 14530
+    mov ax, 0x4530
+    mov [di], bx
+
+    add di, 2
+
+    mov ax, 0xd000
+    mov [di], ax
+
+    add di, 2
+
+    xor ecx, ecx
+    mov ch, 01010001b
+    shl ecx, 8
+    mov ch, 10010010b
+    mov cl, 0x0
+    mov [di], ecx
 
     add di, 4       ;=====================
 

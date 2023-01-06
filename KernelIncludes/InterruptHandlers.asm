@@ -140,6 +140,8 @@ Exceptions:
     .panicScreen:
         pusha
 
+        call Print.clearScreen
+
         mov ax, 0x38
         mov es, ax
         mov gs, ax

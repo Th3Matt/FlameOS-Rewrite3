@@ -187,7 +187,12 @@ PCIDriver:
         shl edi, 24
         shr edi, 24
 
+        push ecx
+        xor ecx, ecx
+
         call Print.string
+
+        pop ecx
 
         push es
         mov cx, 0x80
@@ -218,7 +223,12 @@ PCIDriver:
             mov esi, .deviceTableEntry+1-0x20000
             mov edi, 4
 
+            push ecx
+            xor ecx, ecx
+
             call Print.string
+
+            pop ecx
 
             mov ecx, [es:ebx]
 
@@ -227,7 +237,12 @@ PCIDriver:
             mov edi, 5
             add esi, 4
 
+            push ecx
+            xor ecx, ecx
+
             call Print.string
+
+            pop ecx
 
             mov ecx, [es:ebx+4]
 
@@ -236,7 +251,12 @@ PCIDriver:
             mov edi, 5
             add esi, 5
 
+            push ecx
+            xor ecx, ecx
+
             call Print.string
+
+            pop ecx
 
             mov ecx, [es:ebx+8]
 
@@ -245,8 +265,12 @@ PCIDriver:
             mov edi, 5
             add esi, 5
 
+            push ecx
+            xor ecx, ecx
+
             call Print.string
 
+            pop ecx
 
             mov ecx, [es:ebx+12]
 
@@ -255,7 +279,12 @@ PCIDriver:
             mov edi, 5
             add esi, 5
 
+            push ecx
+            xor ecx, ecx
+
             call Print.string
+
+            pop ecx
 
             mov ecx, [es:ebx+16]
 
@@ -264,7 +293,12 @@ PCIDriver:
             mov edi, 5
             add esi, 5
 
+            push ecx
+            xor ecx, ecx
+
             call Print.string
+
+            pop ecx
 
             mov ecx, [es:ebx+20]
 
@@ -272,6 +306,8 @@ PCIDriver:
 
             mov edi, 3
             add esi, 5
+
+            xor ecx, ecx
 
             call Print.string
 
