@@ -336,6 +336,7 @@ ScreenHeight equ 0x11
 VESAMode equ 0x16							; VESA mode for 800x600x32bpp
 VideoHardwareInterfaces equ 0x18
 CustomSetting equ 0x80 						; First two bits control the detection of disks on ATA buses 0 and 1
+FlPartitionInfo equ 0x82 ; 8 bytes
 DiskDriverVariableSpace equ 0x100;+Vars
 PCIDriverVariableSpace equ 0x150;+Vars
 
@@ -714,6 +715,10 @@ KERNEL:
 
         call Print.refresh
 
+        call Syscall.init
+
+        ud1
+
 		sti
 		hlt
 		jmp $
@@ -877,5 +882,7 @@ IDTloaded:	  db (.end-$-1), "Kernel: IDT initialised."
 %include "Drivers/FLFS.asm"
 
 %include "KernelIncludes/ProgramLoader.asm"
+
+%include "KernelIncludes/Syscall.asm"
 
 times 0x200*0x30-($-$$) db 0

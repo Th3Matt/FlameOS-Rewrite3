@@ -1,20 +1,21 @@
-[ org 0x7C00 ]
+[ org 0x7E00 ]
 [ BITS 16 ]
 
 SVO equ 0x2000 ; System variables offset
 MMO equ 0x3000 ; Memory map offset
 
-jmp 0:0x7C05
-
 Boot:
 	mov ax, 0
 	mov ds, ax
 	mov es, ax
-	
+
 	cli
 	mov ss, ax
-	mov sp, 0x2000
+	mov sp, 0x7c00 ; this might corrupt the stored memory map if the stack becomes too long
 	sti
+
+	mov ds:[SVO+0x82], ebx
+	mov ds:[SVO+0x86], ecx
 
 	mov ds:[SVO], dl
 	mov ah, 0x48
@@ -43,7 +44,7 @@ Boot:
 		xor ebx, ebx
 		mov eax, 0xE820
 		mov edx, 'PAMS'
-		mov ecx, 0x10
+		mov ecx, 0x18
 		mov word es:[di+20], 1
 
 		int 0x15
@@ -87,12 +88,17 @@ Boot:
 
 		jnc .A20GateCheckNoError
 
-		mov ax, 0xB800				; Error B - Unable to check A20.
-		mov es, ax
-		xor di, di
-		mov word es:[di], 0xCF42
+		in al, 0x92
+		test al, 2
+		jz .A20GateCheckNoError
+		jmp .A20GateDone
 
-		jmp $
+		;mov ax, 0xB800				; Error B - Unable to check A20.
+		;mov es, ax
+		;xor di, di
+		;mov word es:[di], 0xCF42
+
+		;jmp $
 
 		.A20GateCheckNoError:
 			cmp al, 0
@@ -102,6 +108,20 @@ Boot:
 			int 0x15
 
 			jnc .A20GateDone
+
+			in al, 0x92
+			or al, 2
+			and al, 0xFE
+			out 0x92, al
+
+			jmp .A20GateDone ; The 'screw this shit, it'll probably work' approach
+
+			mov ecx, 0x100000
+			.checkLoop:
+				in al, 0x92
+				test al, 2
+				jnz .A20GateDone
+				loop .checkLoop
 
 			mov ax, 0xB800			; Error C - Unable to enable A20.
 			mov es, ax
@@ -118,24 +138,26 @@ Boot:
         	int 0x13
         
     	.load:
-	        mov cx, 0x02
-    	    mov dh, 0
     	    mov dl, ds:[SVO]
         	
-        	mov al, 48
         	push ax
-    	    mov ah, 0x02
-    	    mov bx, 0x2000
-    	    mov es, bx
-    	    xor bx, bx
+    	    mov ah, 0x42
+    	    mov si, 0x8000
+			mov dword ds:[si], 0x00300010
+			xor ecx, ecx
+			mov	word ds:[si+4], cx
+			mov word ds:[si+6], 0x2000
+			mov ds:[si+12], ecx
+			mov ecx, ds:[SVO+0x82]
+			inc ecx
+			mov ds:[si+8], ecx
 
 	        int 0x13
     	    pop cx
 
         	jc .counter
         	
-	        cmp al, cl
-	        je .done
+	        jmp .done
         
 	    .counter:
 	        cmp byte [.C], 3
@@ -157,20 +179,6 @@ Boot:
 
     
 	.C: db 0x0
-times 446-($-$$) db 0
-
-PartitionTable:
-	.partition1:
-		db 0x80 ;Bootable
-		db 0xFF ;Filler values, I don't care enough to populate those fields
-		db 0xFF
-		db 0xFF
-		db 0xC8 ;I'm pretty sure this partition ID is (mostly) unused
-		db 0xFF
-		db 0xFF
-		db 0xFF
-		dd 0x00000001
-		dd 0x00000800+1
 
 times 510-($-$$) db 0
 

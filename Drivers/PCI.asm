@@ -318,6 +318,7 @@ PCIDriver:
 
             call Print.string
 
+            call Print.refresh
             pop ecx
             ret
 
