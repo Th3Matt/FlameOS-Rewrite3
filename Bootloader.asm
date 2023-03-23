@@ -11,7 +11,7 @@ Boot:
 
 	cli
 	mov ss, ax
-	mov sp, 0x7c00 ; this might corrupt the stored memory map if the stack becomes too long
+	mov sp, 0x7c00 ; this might corrupt the later stored memory map if the stack becomes too long, but let's hope it doesn't
 	sti
 
 	mov ds:[SVO+0x82], ebx
@@ -180,6 +180,4 @@ Boot:
     
 	.C: db 0x0
 
-times 510-($-$$) db 0
-
-dw 0xAA55
+times 512-($-$$) db 0

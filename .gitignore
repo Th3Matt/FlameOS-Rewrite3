@@ -1,0 +1,7 @@
+*.txt
+Spec
+Builds
+*.ini
+Logs
+*.bin
+*.log
