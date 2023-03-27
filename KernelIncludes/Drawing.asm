@@ -14,7 +14,7 @@ Print:
             add edi, 4
             loop .clearScreen.loop
 
-        mov ecx, 80*50*3
+        mov ecx, 80*60*9/4
         mov ax, 0xA0
         mov gs, ax
         xor edi, edi
@@ -125,8 +125,10 @@ Print:
         pop ds
         ret
 
-    .hex32:   ; eax - color dword, ecx - dword to print, edx - location on screen
+    .hex32:   ; eax - color dword, ebx - bg color dword, ecx - dword to print, edx - location on screen
+        push ebp
         push ebx
+        mov ebp, esp
 
         xchg ecx, edx
         ror edx, 16
@@ -137,7 +139,7 @@ Print:
         shr ebx, 24
         xchg ecx, edx ; edx
         push ecx
-        xor ecx, ecx
+        mov ecx, [ss:ebp]
         call .char
         pop ecx
         inc edx
@@ -152,6 +154,7 @@ Print:
         xchg ecx, edx ; edx
         push ecx
         xor ecx, ecx
+        mov ecx, [ss:ebp]
         call .char
         pop ecx
         inc edx
@@ -166,6 +169,7 @@ Print:
         xchg ecx, edx ; edx
         push ecx
         xor ecx, ecx
+        mov ecx, [ss:ebp]
         call .char
         pop ecx
         inc edx
@@ -180,6 +184,7 @@ Print:
         xchg ecx, edx ; edx
         push ecx
         xor ecx, ecx
+        mov ecx, [ss:ebp]
         call .char
         pop ecx
         inc edx
@@ -195,6 +200,7 @@ Print:
         xchg ecx, edx ; edx
         push ecx
         xor ecx, ecx
+        mov ecx, [ss:ebp]
         call .char
         pop ecx
         inc edx
@@ -209,6 +215,7 @@ Print:
         xchg ecx, edx ; edx
         push ecx
         xor ecx, ecx
+        mov ecx, [ss:ebp]
         call .char
         pop ecx
         inc edx
@@ -223,6 +230,7 @@ Print:
         xchg ecx, edx ; edx
         push ecx
         xor ecx, ecx
+        mov ecx, [ss:ebp]
         call .char
         pop ecx
         inc edx
@@ -236,11 +244,13 @@ Print:
         xchg ecx, edx ; edx
         push ecx
         xor ecx, ecx
+        mov ecx, [ss:ebp]
         call .char
         pop ecx
         inc edx
 
         pop ebx
+        pop ebp
         ret
 
     .refresh:

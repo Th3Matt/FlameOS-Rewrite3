@@ -86,8 +86,8 @@
 
     add di, 4
                     ;---------------------28       -      28         -   Kernel Code
-                    ;20000 - 21fff
-    mov ax, 0x1fff
+                    ;20000 - 25fff
+    mov ax, 0x5fff
     mov [di], ax
 
     add di, 2
@@ -392,8 +392,8 @@
 
     add di, 4
                     ;---------------------A0       -      A0        -   Charmap of screen
-                    ;d000 - 14530
-    mov ax, 0x4530
+                    ;d000 - 178C0
+    mov bx, 0x78C0
     mov [di], bx
 
     add di, 2
@@ -408,6 +408,26 @@
     shl ecx, 8
     mov ch, 10010010b
     mov cl, 0x0
+    mov [di], ecx
+
+    add di, 4
+                    ;---------------------A8       -      A8        -   List of Syscalls
+                    ;178C0 - 18000
+    mov bx, 0x8000
+    mov [di], bx
+
+    add di, 2
+
+    mov ax, 0x78C0
+    mov [di], ax
+
+    add di, 2
+
+    xor ecx, ecx
+    mov ch, 01010001b
+    shl ecx, 8
+    mov ch, 10010010b
+    mov cl, 0x1
     mov [di], ecx
 
     add di, 4       ;=====================

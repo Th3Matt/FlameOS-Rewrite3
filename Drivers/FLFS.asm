@@ -16,6 +16,7 @@ FlFS:
         mov es, ax
 
         mov eax, BootFileSize+1
+        add eax, [es:FlPartitionInfo.firstSector]
         xor ebx, ebx
         mov bx, es:[EDD_DetectedDiskNumber]
         pop es
@@ -63,7 +64,15 @@ FlFS:
 
         mov fs, si
 
+        push es
+        mov ax, 0x10
+        mov es, ax
+
         mov eax, BootFileSize+2
+        add eax, [es:FlPartitionInfo.firstSector]
+
+        pop es
+
         pop ebx
         push ebx
         xor edi, edi
@@ -123,7 +132,8 @@ FlFS:
 
             call Print.string
 
-            jmp $
+            hlt
+            jmp $-1
 
         .init.error.sig:
             mov eax, 0x00FF0000
@@ -133,7 +143,9 @@ FlFS:
             xor ecx, ecx
 
             call Print.string
-            jmp $
+
+            hlt
+            jmp $-1
 
         .init.error.kernelFile:
             mov si, 0x28
@@ -145,17 +157,23 @@ FlFS:
             xor ecx, ecx
 
             call Print.string
-            jmp $
+
+            hlt
+            jmp $-1
 
     .readFile: ; eax - file number, edi - buffer address, ds - buffer segment
         pusha
         push fs
+        push es
 
         mov ecx, FileDescriptorSize
         mul ecx
 
         mov bx, 0x88
         mov fs, bx
+
+        mov bx, 0x10
+        mov es, bx
 
         sldt bx
         push bx
@@ -170,6 +188,7 @@ FlFS:
         mov edx, fs:[eax+22]
         mov ecx, fs:[eax+18]
         mov eax, edx
+        add eax, [es:FlPartitionInfo.firstSector]
         mov ebx, fs:[0]
 
         pop dx
@@ -183,6 +202,7 @@ FlFS:
         clc
 
         .readFile.end:
+            pop es
             pop fs
             popa
             ret

@@ -13,6 +13,7 @@ ProcessManager:
 		xor edi, edi
 
 		rep stosb ;[edi]
+        dec dword [es:0xc]
 
 		mov cx, 0x70 ; Clearing LDT lists
 		mov es, cx
@@ -377,35 +378,35 @@ ProcessManager:
         mov cl, al
         mov [es:esi], ecx
 
-        mov ax, 0x0+4
+        mov ax, (3<<3)+4
         mov es, ax
 
         pop ecx
         shl ecx, 4
 
-        mov [es:0x20], edx
+        mov [es:0x20], edx  ; EIP
 
         pop eax ; pop esi
-        mov [es:0x4C], ax
+        mov [es:0x4C], ax   ; CS
         shr eax, 16
-        mov [es:0x50], ax
+        mov [es:0x50], ax   ; SS
 
         pop eax ; pop edi
-        mov [es:0x08], ax
+        mov [es:0x08], ax   ; SS0
 
         pop eax
 
-        mov [es:0x04], eax
+        mov [es:0x04], eax  ; ESP0
 
         pop ebx
 
-        mov [es:0x38], ebx
+        mov [es:0x38], ebx  ; ESP
 
         xor edi, edi
-        mov [es:0x00], edi
+        mov [es:0x00], edi  ; LINK
 
         mov di, 0x68
-        mov [es:0x60], edi
+        mov [es:0x60], edi  ; LDTR
         mov dword es:[0x24], 0x0200 ; setting interrupt flag
 
         pop edi
@@ -421,7 +422,7 @@ ProcessManager:
 
         mov cx, 0x48               ; preparing to read from saved TSS
         mov ds, cx
-        mov cx, (0x8*3)+100b           ; reparing to write to saved TSS
+        mov cx, (3<<3)+100b           ; reparing to write to saved TSS
         mov es, cx
 
         xor ecx, ecx
@@ -474,7 +475,7 @@ ProcessManager:
 
          mov es:[0x00], word 0x58
 
-         mov cx, 0x0+100b           ; reparing to read from saved TSS
+         mov cx, (3<<3)+100b           ; reparing to read from saved TSS
          mov ds, cx
 
          xor ecx, ecx

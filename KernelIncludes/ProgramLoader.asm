@@ -1,6 +1,6 @@
  
 ProgramLoader:
-    .load: ; eax - UserID, esi - path to file. Output: ebx - Process ID
+    .load: ; eax - UserID, edx - cpu ring, esi - path to file. Output: ebx - Process ID
         push eax
         push ecx
         push ds
@@ -26,7 +26,7 @@ ProgramLoader:
         shl ebx, 4+4+3
         add ebx, eax
         pop ecx
-        xor edx, edx
+        ;xor edx, edx
 
         call MemoryManager.createLDTEntry
 
@@ -55,10 +55,11 @@ ProgramLoader:
 
         ret
 
-    .exec: ; eax - UserID, ebx - Process ID
+    .exec: ; eax - UserID, ebx - Process ID, edx - cpu ring
         push eax
         push ds
         push ebx
+        push edx
 
         mov ax, 0x70
         mov ds, ax
@@ -73,8 +74,10 @@ ProgramLoader:
         add ebx, 0x3ff
         xor edx, edx
 
-        call MemoryManager.createLDTEntry ; Creating SS
+        call MemoryManager.createLDTEntry ; Creating SS0
 
+        or esi, 4+0
+        mov edi, esi
         pop ebx ; pop ecx
         xor eax, eax
         mov ecx, 1
@@ -84,20 +87,21 @@ ProgramLoader:
         mov ecx, ebx
         mov ebx, eax
         add ebx, 0x3ff
-        xor edx, edx
+        ;xor edx, edx
+        pop edx
 
-        call MemoryManager.createLDTEntry ; Creating SS0
+        call MemoryManager.createLDTEntry ; Creating SS
 
         mov dx, 0+4+0
         mov ds, dx
 
         mov edx, [ds:0]
 
-        mov eax, 4+4+3
-        mov ebx, eax
+        shl esi, 16
+        or esi, ((4+3)<<16)+0+4+3
 
-        mov esi, 0+4+((8+4)<<16)
-        mov edi, 16+4
+        mov eax, 0x400
+        mov ebx, eax
 
         call ProcessManager.setUpTask
 
