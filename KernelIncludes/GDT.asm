@@ -430,6 +430,26 @@
     mov cl, 0x1
     mov [di], ecx
 
+    add di, 4
+                    ;---------------------B0       -      B0        -   Devices List
+                    ;18000 - 1A000
+    mov bx, 0xA000
+    mov [di], bx
+
+    add di, 2
+
+    mov ax, 0x8000
+    mov [di], ax
+
+    add di, 2
+
+    xor ecx, ecx
+    mov ch, 01010001b
+    shl ecx, 8
+    mov ch, 10010010b
+    mov cl, 0x1
+    mov [di], ecx
+
     add di, 4       ;=====================
 
     mov si, di
