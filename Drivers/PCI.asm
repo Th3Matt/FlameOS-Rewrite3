@@ -182,7 +182,7 @@ PCIDriver:
 
         mov eax, 0xffffffff
         xor edx, edx
-        mov esi, .deviceTableTop+1-0x20000
+        mov esi, .deviceTableTop+1
         mov edi, [ds:esi-1]
         shl edi, 24
         shr edi, 24
@@ -220,7 +220,7 @@ PCIDriver:
 
         .deviceTablePrint.draw: ; ebx - device #
             push ecx
-            mov esi, .deviceTableEntry+1-0x20000
+            mov esi, .deviceTableEntry+1
             mov edi, 4
 
             push ecx
@@ -311,7 +311,7 @@ PCIDriver:
 
             call Print.string
 
-            mov esi, .deviceTableEnd+1-0x20000
+            mov esi, .deviceTableEnd+1
             mov edi, [ds:esi-1]
             shl edi, 24
             shr edi, 24

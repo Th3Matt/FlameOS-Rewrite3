@@ -2,11 +2,11 @@
 VFS:
     .init:
         pusha
-        push ds
+        push es
         push fs
 
         mov ax, 0x90
-        mov ds, ax
+        mov es, ax
 
         mov ax, 0x88
         mov fs, ax
@@ -17,25 +17,31 @@ VFS:
 
 		rep stosd
 
-		mov byte ds:[0], 00000001b   ; flags - mount point present
+		mov byte es:[0], 00000001b   ; flags - mount point present
 		mov eax, fs:[0]
-		mov ds:[1], eax              ; mounted disk
+		mov es:[1], eax              ; mounted disk
 
-		mov byte ds:[5], '/'         ; mount point (string, 26 byte max length)
+		mov byte es:[5], '/'         ; mount point (string, 26 byte max length)
 
 		pop fs
-        pop ds
+        pop es
         popa
         ret
 
-    .getFileInfo: ; ebx - UserID, esi - file name string (zero-terminated). Output: ebx - file size, dl - file flags
+    .getFileInfo: ; ebx - UserID, ds:esi - file name string (zero-terminated). Output: ebx - file size, dl - file flags
+        push edi
+        push esi
+        push edx
+        push ecx
+        push eax
+        mov eax, esi
         call .mountCheck
 
-        pusha
-        jz .error1
-        popa
+        cmp eax, esi
+        je .getFileInfo.error1
 
         call FlFS.getFileNumber
+        jc .getFileInfo.error1
 
         cmp ebx, 0
         jz .getFileInfo.skipCheck
@@ -43,26 +49,90 @@ VFS:
         call FlFS.getFileInfo
         cmp ebx, ecx
 
-        pusha
-        jnz .error2
-        popa
-
-        ret
+        jnz .getFileInfo.error2
 
         .getFileInfo.skipCheck:
 
         call FlFS.getFileInfo
+
+        pop eax
+        pop ecx
+        pop esi ; pop edx
+        pop esi
+        pop edi
+        ret
+
+    .getFileInfo.error1:
+        pop eax
+        pop ecx
+        pop edx
+        pop esi
+        pop edi
+
+        jmp .error1.postpop
+
+    .getFileInfo.error2:
+        pop eax
+        pop ecx
+        pop edx
+        pop esi
+        pop edi
+
+        jmp .error2.postpop
+
+    .readFileForNewProcess: ; ebx - UserID, ecx - new PID, esi - file name string (zero-terminated), edi - buffer, ds - file name string segment, fs - buffer segment.
+        pusha
+        mov eax, esi
+        push ecx
+        call .mountCheck
+        mov edx, ecx
+
+        cmp eax, esi
+        je .error1
+
+
+        call ProcessManager.getCurrentPID
+        call ProcessManager.setLDT
+        pop ecx
+
+        call FlFS.getFileNumber
+
+        call ProcessManager.setLDT
+        mov ecx, edx
+
+        jc .error1
+
+        cmp ebx, 0
+        jz .readFileForNewProcess.skipCheck
+        push ecx
+        push ebx
+        call FlFS.getFileInfo
+        pop ebx
+        cmp ebx, ecx
+        pop ecx
+        jnz .error2
+
+        .readFileForNewProcess.skipCheck:
+
+        mov bx, fs
+        mov ds, bx
+
+        call FlFS.readFile
 
         popa
         ret
 
     .readFile: ; ebx - UserID, esi - file name string (zero-terminated), edi - buffer, ds - file name string segment, fs - buffer segment.
         pusha
-
+        mov eax, esi
         call .mountCheck
-        jz .error1
+
+        cmp eax, esi
+        je .error1
 
         call FlFS.getFileNumber
+
+        jc .error1
 
         cmp ebx, 0
         jz .readFile.skipCheck
@@ -82,84 +152,62 @@ VFS:
         popa
         ret
 
-        .mountCheck:
+        .mountCheck: ; ds:esi - file path. Output: ecx - mounted disk, esi - path from mountpoint.
+            push edx
+            push eax
+            push ebx
+            push edi
             push fs
+
             mov cx, 0x90
             mov fs, cx
 
-            xor edi, edi
             xor ecx, ecx
+            xor edi, edi
+            xor ebx, ebx
 
-            push word 0
-            push dword 0
-
-            .mountCheck.1:
-                mov dl, fs:[edi+5]
-                inc edi
-
-                inc esi
-                cmp dl, ds:[esi-1] ; Comparing path against mount list
-                jnz .mountCheck.next
+            .mountCheck.loop:
+                mov dl, fs:[edi+ecx+5]     ; read char from mountpoint path
+                cmp dl, ds:[esi+ecx]       ; compare
+                jne .mountCheck.next
 
                 inc ecx
+                cmp byte fs:[edi+ecx+5], 0 ; check if mountpoint path string has ended
+                jnz .mountCheck.loop
 
-                cmp byte ds:[edi+5], 0
-                jnz .mountCheck.1
+                cmp ecx, ebx
+                jl .mountCheck.next
 
-                sub edi, ecx
-                sub esi, ecx
-
-                add edi, 0x20
-
-                pop ecx
-                pop dx
-                cmp dl, cl
-                jg .mountCheck.3
-                and ecx, 0xffffff00
-                push cx
-                mov ecx, [edi+1]
-                push ecx
-
-                xor ecx, ecx
-
-                cmp edi, 0xfdf
-                jnl .mountCheck.2
-
-                jmp .mountCheck.1
-
-            .mountCheck.3:
-                xor ecx, ecx
-                jmp .mountCheck.1
+                mov ebx, ecx
+                mov eax, fs:[edi+1]
 
             .mountCheck.next:
-                sub edi, ecx
-                sub esi, ecx
                 xor ecx, ecx
-
                 add edi, 0x20
 
                 cmp edi, 0xfdf
-                jl .mountCheck.1
+                jle .mountCheck.loop
 
-            .mountCheck.2:
-                pop ecx
-                cmp ecx, 0
+            mov ecx, eax
+            add esi, ebx
 
-                xor edx, edx
-                pop dx
-                add esi, edx
-
-                pop fs
-                ret
+            pop fs
+            pop edi
+            pop ebx
+            pop eax
+            pop edx
+            ret
 
         .error1:
-            stc
             popa
+        .error1.postpop:
+            stc
             mov ebx, 0x00000001 ; Impossible path
             ret
 
         .error2:
-            stc
             popa
+        .error2.postpop:
+            stc
             mov ebx, 0x00000002 ; Not permitted to access
             ret

@@ -7,7 +7,7 @@
     add di, 4
                     ;---------------------08 	   -      08         -   Kernel Stack
 		            ;500 - 1fff
-    mov ax, 0x1fff
+    mov ax, 0x19ff
     mov [di], ax
 
     add di, 2
@@ -27,12 +27,12 @@
     add di, 4
                     ;---------------------10       -      10         -   System Variables
                     ;2000 - 2fff
-    mov ax, 0x2fff
+    mov ax, 0xfff
     mov [di], ax
 
     add di, 2
 
-    mov ax, 0x2000
+    mov ax, Vars
     mov [di], ax
 
     add di, 2
@@ -47,7 +47,7 @@
     add di, 4
                     ;---------------------18       -      18         -   BIOS Memory Map
                     ;3000 - 3fff
-    mov ax, 0x3fff
+    mov ax, 0xfff
     mov [di], ax
 
     add di, 2
@@ -67,7 +67,7 @@
     add di, 4
                     ;---------------------20       -      20         -   IDT (256 entries)
                     ;5000 - 5fff
-    mov ax, 0x5fff
+    mov ax, 0xfff
     mov [di], ax
 
     add di, 2
@@ -98,7 +98,7 @@
     add di, 2
 
     xor ecx, ecx
-    mov ch, 01010010b
+    mov ch, 01010000b
     shl ecx, 8
     mov ch, 10011010b
     mov cl, 2
@@ -107,7 +107,7 @@
     add di, 4
                     ;---------------------30       -      30         -   Video RAM (TextMode)
                     ;b8000 - b8fff
-    mov ax, 0x8fff
+    mov ax, 0xfff
     mov [di], ax
 
     add di, 2
@@ -118,7 +118,7 @@
     add di, 2
 
     xor ecx, ecx
-    mov ch, 01011011b
+    mov ch, 01010000b
     shl ecx, 8
     mov ch, 10010010b
     mov cl, 0xB
@@ -127,9 +127,7 @@
     add di, 4
                     ;---------------------38       -      38         -   Video RAM
                     ;a0000 - e6500 or PCI device 1234:1111 BAR0
-    mov eax, [GraphicsFramebufferAddress+Vars]
-    shr eax, 12
-    add ax, (800*600*4)>>12
+    mov ax, (800*600*4)>>12
     mov [di], ax
 
     add di, 2
@@ -140,9 +138,6 @@
     add di, 2
 
     xor ecx, ecx
-    mov cl, [GraphicsFramebufferAddress+3+Vars]
-    shr cl, 4
-    and cl, 00001111b
     or cl, 11000000b
     mov ch, [GraphicsFramebufferAddress+3+Vars]
 
@@ -154,7 +149,7 @@
     add di, 4
                     ;---------------------40       -      40         -   Process Manager Data
                     ;6000 - 6fff
-    mov ax, 0x6fff
+    mov ax, 0xfff
     mov [di], ax
 
     add di, 2
@@ -174,7 +169,7 @@
     add di, 4
                     ;---------------------48       -      48         -   TSSs in a writable segment
                     ;5900 - 59ff
-    mov ax, 0x59ff
+    mov ax, 0xff
     mov [di], ax
 
     add di, 2
@@ -234,7 +229,7 @@
     add di, 4
                     ;---------------------60       -      60         -   Writable GDT
                     ;4000 - 4fff
-    mov ax, GDTLoc+0xfff ; 0x4fff
+    mov ax, 0xfff ; 0x4fff
     mov [di], ax
 
     add di, 2
@@ -293,7 +288,7 @@
     add di, 4
                     ;---------------------78       -      78         -   MemAlloc Data
                     ;7900 - 88ff
-    mov ax, 0x88ff
+    mov ax, 0xfff
     mov [di], ax
 
     add di, 2
@@ -313,7 +308,7 @@
     add di, 4
                     ;---------------------80       -      80         -   PCI Driver Data
                     ;9000 - 9fff
-    mov ax, 0x9fff
+    mov ax, 0xfff
     mov [di], ax
 
     add di, 2
@@ -333,7 +328,7 @@
     add di, 4
                     ;---------------------88       -      88         -   Filesystem header
                     ;a000 - bfff
-    mov ax, 0xbfff
+    mov ax, 0x1fff
     mov [di], ax
 
     add di, 2
@@ -353,7 +348,7 @@
     add di, 4
                     ;---------------------90       -      90         -   VFS Data
                     ;c000 - cfff
-    mov ax, 0xcfff
+    mov ax, 0xfff
     mov [di], ax
 
     add di, 2
@@ -373,7 +368,7 @@
     add di, 4
                     ;---------------------98       -      98         -   System LDT
                     ;100000-100fff
-    mov bx, 0x100
+    mov bx, 0xfff
     mov [di], bx
 
     add di, 2
@@ -393,7 +388,7 @@
     add di, 4
                     ;---------------------A0       -      A0        -   Charmap of screen
                     ;d000 - 178C0
-    mov bx, 0x78C0
+    mov bx, 0xA8C0
     mov [di], bx
 
     add di, 2
@@ -404,7 +399,7 @@
     add di, 2
 
     xor ecx, ecx
-    mov ch, 01010001b
+    mov ch, 01010000b
     shl ecx, 8
     mov ch, 10010010b
     mov cl, 0x0
@@ -413,7 +408,7 @@
     add di, 4
                     ;---------------------A8       -      A8        -   List of Syscalls
                     ;178C0 - 18000
-    mov bx, 0x8000
+    mov bx, 0x740
     mov [di], bx
 
     add di, 2
@@ -424,7 +419,7 @@
     add di, 2
 
     xor ecx, ecx
-    mov ch, 01010001b
+    mov ch, 01010000b
     shl ecx, 8
     mov ch, 10010010b
     mov cl, 0x1
@@ -433,7 +428,7 @@
     add di, 4
                     ;---------------------B0       -      B0        -   Devices List
                     ;18000 - 1A000
-    mov bx, 0xA000
+    mov bx, 0x2000
     mov [di], bx
 
     add di, 2
@@ -444,7 +439,7 @@
     add di, 2
 
     xor ecx, ecx
-    mov ch, 01010001b
+    mov ch, 01010000b
     shl ecx, 8
     mov ch, 10010010b
     mov cl, 0x1
@@ -470,6 +465,6 @@
     or al, 1       ; set PE (Protection Enable) bit in CR0 (Control Register 0)
     mov cr0, eax
 
-    jmp 0x28:KernelInit32
+    jmp 0x28:0
 
     SetGDT:

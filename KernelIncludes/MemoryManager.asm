@@ -92,6 +92,7 @@ MemoryManager:
 
     .memAlloc:    ; eax - process ID, ecx - requested blocks of 4 KiB. Output: eax - address of allocated space
         push es
+        push ecx
         push edi
         push edx
         push ebx
@@ -185,6 +186,7 @@ MemoryManager:
         pop ebx
         pop edx
         pop edi
+        pop ecx
         pop es
         ret
 
@@ -201,22 +203,25 @@ MemoryManager:
             mov eax, 0xff880000
             rep stosd
 
+            mov ecx, 0xff880000
+            call Print.fillScreen
+
             mov si, 0x28
             mov ds, si
             mov eax, 0x00FFFFFF
-            mov esi, .outOfMemoryErrorMsg-0x20000+1
-            mov edi, [.outOfMemoryErrorMsg-0x20000]
+            mov esi, .outOfMemoryErrorMsg+1
+            mov edi, [.outOfMemoryErrorMsg]
             and edi, 0xff
 
-            mov edx, (800/20)*580+(800/20)
+            mov edx, (800/10)*(30/10)+(800/20)
             push edi
             shr edi, 1
             sub edx, edi
             pop edi
-            xor ecx, ecx
 
             call Print.string
 
+            call Print.refresh
             jmp $
 
     .memFreeAll:  ; eax - process ID ; Note: frees all memory taken by process with PID
@@ -340,7 +345,7 @@ MemoryManager:
         xor eax, eax
         not eax
         xor edx, edx
-        mov esi, .memTableTop+1-0x20000
+        mov esi, .memTableTop+1
         mov edi, [ds:esi-1]
         shl edi, 24
         shr edi, 24
@@ -367,7 +372,7 @@ MemoryManager:
 
         .memAllocPrint.drawEntry: ; ebx - entry
             push ecx
-            mov esi, .memTableEntry+1-0x20000
+            mov esi, .memTableEntry+1
             mov edi, 4
             xor ecx, ecx
 
@@ -403,7 +408,7 @@ MemoryManager:
 
             call Print.string
 
-            mov esi, .memTableEnd+1-0x20000
+            mov esi, .memTableEnd+1
             mov edi, [ds:esi-1]
             shl edi, 24
             shr edi, 24
@@ -430,3 +435,51 @@ MemoryManager:
         db "OUT OF MEMORY, so that sucks, I guess."
     .end:
 
+    .usermodeAllocate: ; ecx - requested blocks of 4 KiB
+        push eax
+        push ebx
+        push ecx
+        push edx
+        push edi
+
+        push ecx
+        call ProcessManager.getCurrentPID
+        mov eax, ecx
+        pop ecx
+        call .memAlloc
+        push eax
+
+        mov eax, 0x1000
+        mul ecx
+
+        mov ebx, eax
+        dec ebx
+        pop eax
+
+        mov edx, 3
+
+        push ds
+        mov si, 0x70
+        mov ds, si
+
+        call ProcessManager.getCurrentPID
+
+        call .createLDTEntry
+
+        or esi, 111b
+
+        mov es, si
+        xor edi, edi
+        xor eax, eax
+        mov ecx, ebx
+
+        rep stosb
+
+        pop ds
+        pop edi
+        pop edx
+        pop ecx
+        pop ebx
+        pop eax
+
+        ret

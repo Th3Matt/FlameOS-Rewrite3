@@ -1,0 +1,9 @@
+Screen:
+    0x0  - Print
+    0x1  - Clear screen
+
+Keyboard:
+    0x10 - Get key
+
+Process controll:
+    0x20 - Yield

@@ -1,17 +1,21 @@
  
 ProgramLoader:
-    .load: ; eax - UserID, edx - cpu ring, esi - path to file. Output: ebx - Process ID
+    .load: ; eax - UserID, edx - cpu ring, ds:esi - path to file. Output: ecx - Process ID
         push eax
-        push ecx
-        push ds
+        push edx
+        push fs
         push esi
+        push ds
 
         mov ebx, eax
         push ebx
 
         call ProcessManager.startProcess
 
+        push edx
         call VFS.getFileInfo
+        pop edx
+        jc .load.error
         push esi
         push eax
 
@@ -31,31 +35,54 @@ ProgramLoader:
         call MemoryManager.createLDTEntry
 
 		pop eax
-        mov ds, si
+        mov fs, si
         pop esi
         xor edi, edi
+
         pop ebx
-        call VFS.readFile
+        pop ds
+        push ds
+        push ebx
+
+        call ProcessManager.setLDT
+
+        push es
+        mov ax, 0x8
+        mov es, ax
+        xor edi, edi
+
+        call VFS.readFileForNewProcess
 
         xor esi, esi
         mov si, ds
 
-        mov bx, 0x70
-        mov ds, bx
-
-        mov ebx, ecx
-        shl ecx, 6+8
-        add ecx, 5
-        or byte [ds:ecx+esi], 00001000b ; Making the segment executable
-
-        pop esi
-        pop ds
+        push ecx
+        call ProcessManager.getCurrentPID
+        call ProcessManager.setLDT
         pop ecx
+
+        pop es
+        pop ebx
+        pop ds
+        pop esi
+        pop fs
+        pop edx
         pop eax
 
         ret
 
-    .exec: ; eax - UserID, ebx - Process ID, edx - cpu ring
+        .load.error:
+            call ProcessManager.stopProcess
+            stc
+            pop esi ; pop ebx
+            pop esi
+            pop fs
+            pop edx
+            pop eax
+
+            ret
+
+    .exec: ; eax - UserID, ecx - Process ID, edx - cpu ring
         push eax
         push ds
         push ebx
@@ -63,34 +90,39 @@ ProgramLoader:
 
         mov ax, 0x70
         mov ds, ax
-        mov eax, ebx
+        mov eax, ecx
+        push ecx
         mov ecx, 1
 
         call MemoryManager.memAlloc
 
-        mov ecx, ebx
-        push ecx
-        mov ebx, eax
-        add ebx, 0x3ff
+        mov ebx, 0x3ff
+        pop ecx
         xor edx, edx
 
         call MemoryManager.createLDTEntry ; Creating SS0
 
         or esi, 4+0
         mov edi, esi
-        pop ebx ; pop ecx
-        xor eax, eax
+        mov eax, ecx
+        push ecx
         mov ecx, 1
 
         call MemoryManager.memAlloc
 
         mov ecx, ebx
-        mov ebx, eax
-        add ebx, 0x3ff
+        mov ebx, 0x3ff
+        pop ecx
         ;xor edx, edx
         pop edx
 
         call MemoryManager.createLDTEntry ; Creating SS
+
+        push fs
+        mov dx, 0x8
+        mov fs, dx
+
+        call ProcessManager.setLDT
 
         mov dx, 0+4+0
         mov ds, dx
@@ -100,21 +132,62 @@ ProgramLoader:
         shl esi, 16
         or esi, ((4+3)<<16)+0+4+3
 
+        push es
+        mov ax, 0x8
+        mov es, ax
         mov eax, 0x400
         mov ebx, eax
 
         call ProcessManager.setUpTask
 
+        push ecx
+        call ProcessManager.getCurrentPID
+        call ProcessManager.setLDT
+        pop ecx
+
+        pop es
+
+        pop fs
+
         mov bx, 0x70
         mov ds, bx
 
-        pop ebx
-        mov ecx, ebx
         shl ecx, 3+4+4
         add ecx, 5
         or byte [ds:ecx], 00001000b ; Making the segment executable
 
+        pop ebx
         pop ds
         pop eax
 
         ret
+
+    .quickLoad: ; ds:esi - path to executable.
+        push edx
+        xor eax, eax
+        mov edx, 0x3
+
+        call .load
+        jc .quickLoad.error
+
+        cli
+
+        call .exec
+
+        mov eax, ecx
+        call ProcessManager.getCurrentPID
+
+        call ProcessManager.pauseProcess
+
+        sti
+        hlt
+
+        xor eax, eax
+        pop edx
+        ret
+
+        .quickLoad.error:
+            mov eax, ebx
+
+            pop edx
+            ret

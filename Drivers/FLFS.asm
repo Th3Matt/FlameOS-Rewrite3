@@ -89,10 +89,10 @@ FlFS:
         .init.fileNameLoop:
             lodsb
 
-            cmp byte es:[.KernelFileName-0x20000+ecx], 0
+            cmp byte es:[.KernelFileName+ecx], 0
             jz .init.fileNameLoop.done
 
-            cmp al, es:[.KernelFileName-0x20000+ecx]
+            cmp al, es:[.KernelFileName+ecx]
             jnz .init.error.kernelFile
 
             inc ecx
@@ -100,14 +100,17 @@ FlFS:
 
         .init.fileNameLoop.done:
 
+        mov bx, 0x88
+        mov fs, bx
+
         pop ebx
         mov fs:[0], ebx ; saving disk number over signature
 
         mov si, 0x28
         mov ds, si
         mov eax, 0x00FFFFFF
-        mov esi, .FoundBootDiskMsg-0x20000+1
-        mov di, [.FoundBootDiskMsg-0x20000]
+        mov esi, .FoundBootDiskMsg+1
+        mov di, [.FoundBootDiskMsg]
         and di, 0xff
         pop edx
 
@@ -125,8 +128,8 @@ FlFS:
 
         .init.error:
             mov eax, 0x00FF0000
-            mov esi, .DiskNotFoundMsg-0x20000+1
-            mov di, [.DiskNotFoundMsg-0x20000]
+            mov esi, .DiskNotFoundMsg+1
+            mov di, [.DiskNotFoundMsg]
             and di, 0xff
             xor ecx, ecx
 
@@ -137,8 +140,8 @@ FlFS:
 
         .init.error.sig:
             mov eax, 0x00FF0000
-            mov esi, .FSSignatureWrongMsg-0x20000+1
-            mov di, [.FSSignatureWrongMsg-0x20000]
+            mov esi, .FSSignatureWrongMsg+1
+            mov di, [.FSSignatureWrongMsg]
             and di, 0xff
             xor ecx, ecx
 
@@ -151,8 +154,8 @@ FlFS:
             mov si, 0x28
             mov ds, si
             mov eax, 0x00FF0000
-            mov esi, .KernelFileMissingMsg-0x20000+1
-            mov di, [.KernelFileMissingMsg-0x20000]
+            mov esi, .KernelFileMissingMsg+1
+            mov di, [.KernelFileMissingMsg]
             and di, 0xff
             xor ecx, ecx
 
@@ -175,13 +178,18 @@ FlFS:
         mov bx, 0x10
         mov es, bx
 
-        sldt bx
+        sldt bx      ; storing the process ldt
         push bx
         mov bx, 0x98
         lldt bx
 
-        mov bx, fs:[10]
-        mov fs, bx
+        mov ebx, fs:[0]
+
+        push ecx
+        mov cx, fs:[10]
+        mov fs, cx
+        pop ecx
+
         mov cl, fs:[eax]
         test cl, 00000001b
         jz .readFile.noFile
@@ -189,10 +197,9 @@ FlFS:
         mov ecx, fs:[eax+18]
         mov eax, edx
         add eax, [es:FlPartitionInfo.firstSector]
-        mov ebx, fs:[0]
 
         pop dx
-        lldt dx
+        lldt dx     ; restoring process ldt
 
         mov dx, ds
         mov fs, dx
@@ -213,11 +220,17 @@ FlFS:
             stc
             jmp .readFile.end
 
-    .getFileInfo: ; eax - file number. Output: ebx - file size, dl - file flags.
+    .getFileInfo: ; eax - file number. Output: ebx - file size, cl - UserID, dl - file flags.
         push fs
         push eax
         mov bx, 0x88
         mov fs, bx
+
+        sldt bx
+        push bx
+        mov bx, 0x98
+        lldt bx
+
         mov bx, fs:[10]
         mov fs, bx
 
@@ -230,17 +243,25 @@ FlFS:
         xor edx, edx
         mov dl,  fs:[eax]
 
+        pop dx
+        lldt dx     ; restoring process ldt
+
         pop eax
         pop fs
         ret
 
-    .getFileNumber: ; esi - file name string (zero-terminated), ds - file name string segment. Output: eax - file number
+    .getFileNumber: ; ds:esi - file name string (zero-terminated). Output: eax - file number
         push ebx
         push ecx
         push edx
         push esi
         push edi
         push fs
+
+        sldt bx
+        push bx
+        mov bx, 0x98
+        lldt bx
 
         mov ax, 0x88
         mov fs, ax
@@ -310,6 +331,9 @@ FlFS:
             clc
 
         .getFileNumber.end:
+            pop dx
+            lldt dx     ; restoring process ldt
+
             pop fs
             pop edi
             pop esi

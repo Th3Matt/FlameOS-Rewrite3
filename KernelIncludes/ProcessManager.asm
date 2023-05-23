@@ -22,23 +22,6 @@ ProcessManager:
 		xor edi, edi
 
 		rep stosd
-
-        ;mov cx, 0x60 ; Clearing LDT segment
-		;mov es, cx
-
-		;mov ecx, 0x800/4
-		;xor edi, edi
-
-		;rep stosd
-
-		mov cx, 0x78 ; Clearing memAlloc segment
-		mov es, cx
-
-		mov ecx, 7ffh
-		xor edi, edi
-
-		rep stosb
-
 		xor eax, eax
 		call .startProcess
 
@@ -59,7 +42,6 @@ ProcessManager:
 		mov es, ax
 		mov eax, [es:edi]
 		xor ecx, ecx
-		inc ecx
 		mov ebx, 1
 
 		.findNextFreeProcessSlot.searchForSlot:
@@ -92,7 +74,6 @@ ProcessManager:
             pop edi
             pop es
             ret
-
 
 	.startProcess:	; eax - User ID. Output: ecx - Process ID
 		push es
@@ -204,8 +185,6 @@ ProcessManager:
 
         shl ebx, cl
 
-        not ebx
-
         push es
         push eax
         mov ax, 0x40
@@ -216,7 +195,6 @@ ProcessManager:
         jz .resumeProcess.notStarted
 
         shl ecx, 4
-        mov [es:ecx+0x20], ebx
         xor ebx, ebx
         and byte [es:ecx+0x20+0x4], 0xFE
         mov dword [es:ecx+0x20+0x8], ebx
@@ -243,11 +221,7 @@ ProcessManager:
         xor edi, edi
         mov bx, 0x1
 
-        dec ecx
-
         shl ebx, cl
-
-        not ebx
 
         push es
         push eax
@@ -259,6 +233,9 @@ ProcessManager:
         jz .stopProcess.notStarted
 
         xor [es:edi], ebx
+
+        inc ecx
+        call .resumeAppropriateProcesses
 
         dec dword [es:0xc]
 
@@ -272,6 +249,46 @@ ProcessManager:
             stc
             pop es
             pop ebx
+            ret
+
+    .resumeAppropriateProcesses: ; ecx - PID. Resumes processes waiting for another one to finish.
+        pusha
+
+		xor edi, edi
+		mov ax, 0x40
+		mov es, ax
+		mov eax, [es:edi]
+		xor edx, edx
+		mov ebx, 1
+
+		.resumeAppropriateProcesses.search:
+			test eax, ebx
+			jnz .resumeAppropriateProcesses.found
+
+        .resumeAppropriateProcesses.search.continue:
+			inc edx
+			shl ebx, 1
+
+			cmp edx, 32
+			jg .resumeAppropriateProcesses.done
+			jmp .resumeAppropriateProcesses.search
+
+		.resumeAppropriateProcesses.found:
+			shl edx, 4
+
+			cmp dword [es:edx+0x20+0x8], ecx
+			jne .resumeAppropriateProcesses.search.continue
+
+			shr edx, 4
+			xchg edx, ecx
+			call .resumeProcess
+			xchg edx, ecx
+
+			jmp .resumeAppropriateProcesses.search.continue
+
+        .resumeAppropriateProcesses.done:
+            popa
+
             ret
 
     .setLDT: ; ecx - Process ID
@@ -319,7 +336,7 @@ ProcessManager:
     .setUpTask: ; eax - ESP0, ebx - ESP, ecx - Process ID, edx - EIP, esi - CS+(SS<<16), edi - SS0
         push ds
         push es
-        push fs
+        push ecx
         push esi
         push edi
 
@@ -411,15 +428,13 @@ ProcessManager:
 
         pop edi
         pop esi
-        pop fs
+        pop ecx
         pop es
         pop ds
 
         ret
 
     .sheduler:
-        push es
-
         mov cx, 0x48               ; preparing to read from saved TSS
         mov ds, cx
         mov cx, (3<<3)+100b           ; reparing to write to saved TSS
@@ -433,11 +448,7 @@ ProcessManager:
 
         rep movsb
 
-        pop es
-
         .sheduler.skipWrite:
-
-        push es
 
         mov ax, 0x40
 		mov es, ax
@@ -468,6 +479,7 @@ ProcessManager:
         push eax
         push ecx
 
+
          call .setLDT
 
          mov cx, 0x48               ; preparing to write to TSS
@@ -486,12 +498,15 @@ ProcessManager:
 
          rep movsb
 
+        mov ax, 0x40
+		mov es, ax
+
         pop ecx
         pop eax
 
+
         mov [es:4], eax             ; save mask
         mov [es:8], ecx             ; save task #
-		pop es
 
 		clc
 
@@ -500,3 +515,36 @@ ProcessManager:
 
         .sheduler.return:
             ret
+
+    .yield:
+        sti
+        hlt
+        cli
+        ret
+
+    .getCurrentPID: ; ecx - PID
+        push eax
+        push es
+
+        mov ax, 0x40
+		mov es, ax
+
+        mov ecx, [es:8]
+
+        pop es
+        pop eax
+
+        ret
+
+    .processExit:
+        pusha
+
+        call .getCurrentPID
+        mov eax, ecx
+        cli
+        call MemoryManager.memFreeAll
+        call .stopProcess
+
+        sti
+        hlt
+        jmp $

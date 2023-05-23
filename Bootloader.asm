@@ -142,17 +142,28 @@ Boot:
         	
         	push ax
     	    mov ah, 0x42
-    	    mov si, 0x8000
-			mov dword ds:[si], 0x00300010
+    	    mov si, .diskReadPacket
+			xor ecx, ecx
+			mov ds:[si+12], ecx
+			mov ecx, ds:[SVO+0x82]
+			inc ecx
+			push ecx
+			mov ds:[si+8], ecx
+
+	        int 0x13
+
+	        mov ah, 0x42
+			mov dword ds:[si], 0x002A0010
 			xor ecx, ecx
 			mov	word ds:[si+4], cx
 			mov word ds:[si+6], 0x2000
 			mov ds:[si+12], ecx
-			mov ecx, ds:[SVO+0x82]
-			inc ecx
+			pop ecx
+			add ecx, 5
 			mov ds:[si+8], ecx
 
 	        int 0x13
+
     	    pop cx
 
         	jc .counter
@@ -175,9 +186,16 @@ Boot:
 
 		.done:
 
-	jmp 0x2000:0
+	jmp 0:0x8000
 
     
 	.C: db 0x0
+
+	.diskReadPacket:
+		db 0x10			; Packet size
+		db 0			; Reserved
+		dw 0x5			; Sectors to read
+		dd 0x00008000 	; Buffer
+		dq 0			; Starting block number
 
 times 512-($-$$) db 0

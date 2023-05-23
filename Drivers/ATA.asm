@@ -149,15 +149,20 @@ S_ATA_PI:
             pop edx
 
             push eax
-            xor eax, eax
-            mov al, [.noBus1Message-0x20000]
-            mov esi, .noBus1Message-0x20000+1
-            mov edi, eax
+            push ecx
+
+            xor ecx, ecx
             xor eax, eax
             not eax
+            mov esi, .Driver_Message_Prefix+1
+            mov di, [ds:.Driver_Message_Prefix]
+            and di, 0xff
 
-            push ecx
-            xor ecx, ecx
+            call Print.string
+
+            mov esi, .noBus1Message+1
+            mov di, [.noBus1Message]
+            and di, 0xff
 
             call Print.string
 
@@ -171,16 +176,20 @@ S_ATA_PI:
             pop edx
 
             push eax
+            push ecx
 
-            xor eax, eax
-            mov al, [.noBus2Message-0x20000]
-            mov esi, .noBus2Message-0x20000+1
-            mov edi, eax
+            xor ecx, ecx
             xor eax, eax
             not eax
+            mov esi, .Driver_Message_Prefix+1
+            mov di, [ds:.Driver_Message_Prefix]
+            and di, 0xff
 
-            push ecx
-            xor ecx, ecx
+            call Print.string
+
+            mov esi, .noBus2Message+1
+            mov di, [.noBus2Message]
+            and di, 0xff
 
             call Print.string
 
@@ -194,15 +203,21 @@ S_ATA_PI:
         .detectDevices.nonExistantBus:
             pop edx
         .detectDevices.allBusOFF:
-            xor eax, eax
-            mov al, [.noBusOnMessage-0x20000]
-            mov esi, .noBusOnMessage-0x20000+1
-            mov edi, eax
+            push ecx
+
+            xor ecx, ecx
             xor eax, eax
             not eax
+            mov esi, .Driver_Message_Prefix+1
+            mov di, [ds:.Driver_Message_Prefix]
+            and di, 0xff
 
-            push ecx
-            xor ecx, ecx
+            call Print.string
+
+            mov eax, 0x00CC0000
+            mov esi, .noBusOnMessage+1
+            mov di, [.noBusOnMessage]
+            and di, 0xff
 
             call Print.string
 
@@ -219,18 +234,22 @@ S_ATA_PI:
 
         .checkATABus.Disk1:
 
-        mov esi, .noBus1Message-0x20000+1
-
-        xor eax, eax
-        not eax
-
         push edx
+        push ecx
 
         mov edx, edi
-        mov edi, 6
 
-        push ecx
         xor ecx, ecx
+        xor eax, eax
+        not eax
+        mov esi, .Driver_Message_Prefix+1
+        mov di, [ds:.Driver_Message_Prefix]
+        and di, 0xff
+
+        call Print.string
+
+        mov esi, .noBus1Message+1
+        mov edi, 6
 
         call Print.string
 
@@ -264,151 +283,28 @@ S_ATA_PI:
         mov al, 10100000b ; LBA, Disk 0
         out dx, al
 
-        inc edx
-        call .delay400
-
-        dec edx
-        dec edx
-        xor eax, eax
-
-        out dx, al
-        dec edx
-        out dx, al
-        dec edx
-        out dx, al
-        dec edx
-        out dx, al
-
-        add edx, 5
-        mov eax, 0xEC
-
-        out dx, al
-
-        in al, dx
-        cmp al, 0
-        jnz .checkATABus.Disk1.1
-
-        call .checkATABus.Disks.noDisk
-
-        jmp .checkATABus.Disk2
-
-        .checkATABus.Disk1.1:
-
-        test al, ATA_ERR
-        jnz .checkATABus.Disk1.loop1.done
-
-        mov ecx, 1000000                   ; some random timeout number
-
-        .checkATABus.Disk1.loop1:
-            dec ecx
-            jnz .checkATABus.Disk1.2
-
-            call .checkATABus.Disks.noDisk ; timeout
-            jmp .checkATABus.Disk2
-
-            .checkATABus.Disk1.2:
-            in al, dx
-            test al, ATA_BSY
-            jnz .checkATABus.Disk1.loop1
-
-        .checkATABus.Disk1.loop1.done:
-        dec edx
-        dec edx
-
-        in al, dx
-        dec edx
-        push ax
-
-        cmp al, 0
-        jz .checkATABus.Disk1.3
-
-        call .checkATABus.Disks.notATA
-        pop ax
-        jmp .checkATABus.Disk2
-
-        .checkATABus.Disk1.3:
-
-        in al, dx
-
-        cmp al, 0
-        jz .checkATABus.Disk1.4
-
-        call .checkATABus.Disks.notATA.1
-        pop ax
-        jmp .checkATABus.Disk2
-
-        .checkATABus.Disk1.4:
-        pop ax
-
-        add edx, 3
-        mov ecx, ATA_MAX_DRIVE_ERRORS
-
-        .checkATABus.Disk1.loop2:
-            in al, dx
-            test al, (ATA_ERR|ATA_DF)
-            jz .checkATABus.Disk1.5
-            call .checkATABus.Disks.error
-            jc .checkATABus.Disk2
-            jmp .checkATABus.Disk1
-
-            .checkATABus.Disk1.5:
-
-            test al, ATA_DRQ
-            jz .checkATABus.Disk1.loop2
-
-        sub edx, 7
-        mov ecx, 256
-
-        .checkATABus.Disk1.6:
-            rep in ax, dx
-            loop .checkATABus.Disk1.6
-
-        mov esi, .ATA___Message-0x20000+1
-        push edx
-
-        mov edx, edi
-        xor eax, eax
-        mov al, [.ATA___Message-0x20000]
-        mov edi, eax
-        xor eax, eax
-        not eax
-
-        push ecx
-        xor ecx, ecx
-
-        call Print.string
-
-        pop ecx
-
-        mov edi, edx
-
-        pop edx
-
-        push eax
-        xor eax, eax
-        or  al, 00000001b ; ATA, Present
-        ror al, 4
-        mov es:[ebx+ADA1], al
-        pop eax
-
-        add edx, 3
+        call .checkATABus.checkDisk
 
         .checkATABus.Disk2:
 
         add edx, 3
 
-        mov esi, .noBus1Message-0x20000+1
-
-        xor eax, eax
-        not eax
-
         push edx
+        push ecx
 
         mov edx, edi
-        mov edi, 6
 
-        push ecx
         xor ecx, ecx
+        xor eax, eax
+        not eax
+        mov esi, .Driver_Message_Prefix+1
+        mov di, [ds:.Driver_Message_Prefix]
+        and di, 0xff
+
+        call Print.string
+
+        mov esi, .noBus1Message+1
+        mov edi, 6
 
         call Print.string
 
@@ -440,133 +336,7 @@ S_ATA_PI:
         mov al, 10110000b ; LBA, Disk 1
         out dx, al
 
-        inc edx
-        call .delay400
-
-        dec edx
-        dec edx
-        xor eax, eax
-
-        out dx, al
-        dec edx
-        out dx, al
-        dec edx
-        out dx, al
-        dec edx
-        out dx, al
-
-        add edx, 5
-        mov eax, 0xEC
-
-        out dx, al
-
-        in al, dx
-        cmp al, 0
-        jnz .checkATABus.Disk2.1
-
-        call .checkATABus.Disks.noDisk
-        pop ecx
-        jmp .checkATABus.end
-
-        .checkATABus.Disk2.1:
-
-        test al, ATA_ERR
-        jnz .checkATABus.Disk2.loop1.done
-
-        mov ecx, 1000000                   ; some random timeout number
-
-        .checkATABus.Disk2.loop1:
-            dec ecx
-            jnz .checkATABus.Disk2.2
-
-            call .checkATABus.Disks.noDisk ; timeout
-            jmp .checkATABus.end
-
-            .checkATABus.Disk2.2:
-            in al, dx
-            test al, ATA_BSY
-            jnz .checkATABus.Disk2.loop1
-
-        .checkATABus.Disk2.loop1.done:
-        dec edx
-        dec edx
-
-        in al, dx
-        dec edx
-        push ax
-
-        cmp al, 0
-        jz .checkATABus.Disk2.3
-
-        call .checkATABus.Disks.notATA
-        pop ax
-        jmp .checkATABus.end
-
-        .checkATABus.Disk2.3:
-
-        in al, dx
-
-        cmp al, 0
-        jz .checkATABus.Disk2.4
-
-        call .checkATABus.Disks.notATA.1
-        pop ax
-        jmp .checkATABus.end
-
-        .checkATABus.Disk2.4:
-        pop ax
-
-        add edx, 3
-        mov ecx, ATA_MAX_DRIVE_ERRORS
-
-        .checkATABus.Disk2.loop2:
-            in al, dx
-            test al, (ATA_ERR|ATA_DF)
-            jz .checkATABus.Disk2.5
-            call .checkATABus.Disks.error
-            jc .checkATABus.end
-            jmp .checkATABus.Disk2
-
-            .checkATABus.Disk2.5:
-
-            test al, ATA_DRQ
-            jz .checkATABus.Disk2.loop2
-
-        sub edx, 7
-        mov ecx, 256
-
-        .checkATABus.Disk2.6:
-            rep in ax, dx
-            loop .checkATABus.Disk2.6
-
-        mov esi, .ATA___Message-0x20000+1
-        push edx
-
-        mov edx, edi
-        xor eax, eax
-        mov al, [.ATA___Message-0x20000]
-        mov edi, eax
-        xor eax, eax
-        not eax
-
-        push ecx
-        xor ecx, ecx
-
-        call Print.string
-
-        pop ecx
-
-        mov edi, edx
-
-        pop edx
-
-        push eax
-        mov al, es:[ebx+ADA1]
-        and al, 0xF0
-        or  al, 00000001b ; ATA, Present
-        ror al, 4
-        mov es:[ebx+ADA1], al
-        pop eax
+        call .checkATABus.checkDisk
 
         .checkATABus.end:
 
@@ -575,6 +345,144 @@ S_ATA_PI:
         pop ecx
         pop eax
         ret
+
+        .checkATABus.checkDisk:
+            push edx
+
+            inc edx
+            call .delay400
+
+            dec edx
+            dec edx
+            xor eax, eax
+            out dx, al ; LBA high byte
+
+            dec edx
+            out dx, al ; LBA mid byte
+
+            dec edx
+            out dx, al ; LBA low byte
+
+            dec edx
+            out dx, al ; Sector count register
+
+            add edx, 5
+            mov eax, 0xEC
+
+            out dx, al ; Command register
+
+            in al, dx  ; Status register
+            cmp al, 0
+            jnz .checkATABus.checkDisk.1
+
+            call .checkATABus.Disks.noDisk
+
+            jmp .checkATABus.checkDisk.end
+
+            .checkATABus.checkDisk.1:
+
+            test al, ATA_ERR
+            jnz .checkATABus.checkDisk.loop1.done
+
+            mov ecx, 1000000                   ; some random timeout number
+
+            .checkATABus.checkDisk.loop1:
+                dec ecx
+                jnz .checkATABus.checkDisk.2
+
+                call .checkATABus.Disks.noDisk ; timeout
+                jmp .checkATABus.checkDisk.end
+
+                .checkATABus.checkDisk.2:
+                in al, dx ; Status register
+                test al, ATA_BSY
+                jnz .checkATABus.checkDisk.loop1
+
+            .checkATABus.checkDisk.loop1.done:
+            dec edx
+            dec edx
+
+            in al, dx ; LBA high byte
+            dec edx
+            push ax
+
+            cmp al, 0
+            jz .checkATABus.checkDisk.3
+
+            call .checkATABus.Disks.notATA
+            pop ax
+            jmp .checkATABus.checkDisk.end
+
+            .checkATABus.checkDisk.3:
+
+            in al, dx ; LBA mid byte
+
+            cmp al, 0
+            jz .checkATABus.checkDisk.4
+
+            call .checkATABus.Disks.notATA.1
+            pop ax
+            jmp .checkATABus.checkDisk.end
+
+            .checkATABus.checkDisk.4:
+            pop ax
+
+            add edx, 3
+            mov ecx, ATA_MAX_DRIVE_ERRORS
+
+            .checkATABus.checkDisk.loop2:
+                in al, dx ; Status register
+                test al, (ATA_ERR|ATA_DF)
+                jz .checkATABus.checkDisk.5
+                call .checkATABus.Disks.error
+                jc .checkATABus.checkDisk.end
+                jmp .checkATABus.checkDisk
+
+                .checkATABus.checkDisk.5:
+
+                test al, ATA_DRQ
+                jz .checkATABus.checkDisk.loop2
+
+            sub edx, 7
+            mov ecx, 256
+
+            .checkATABus.checkDisk.6:
+                rep in ax, dx ; Data register
+                loop .checkATABus.checkDisk.6
+
+            mov esi, .ATA___Message+1
+            push edx
+
+            mov edx, edi
+            xor eax, eax
+            mov al, [.ATA___Message]
+            mov edi, eax
+            xor eax, eax
+            not eax
+
+            push ecx
+            xor ecx, ecx
+
+            call Print.string
+
+            pop ecx
+
+            mov edi, edx
+
+            pop edx
+
+            push eax
+            xor eax, eax
+            or  al, 00000001b ; ATA, Present
+            ror al, 4
+            mov es:[ebx+ADA1], al
+            pop eax
+
+            .checkATABus.checkDisk.end:
+
+            pop edx
+
+            ret
 
         .checkATABus.Disks.notATA:
             in al, dx
@@ -591,12 +499,12 @@ S_ATA_PI:
             cmp ax, 0x14EB
             jne .checkATABus.Disks.notATAPI
 
-            mov esi, .ATAPI_Message-0x20000+1
+            mov esi, .ATAPI_Message+1
             push edx
 
             mov edx, edi
             xor eax, eax
-            mov al, [.ATAPI_Message-0x20000]
+            mov al, [.ATAPI_Message]
             mov edi, eax
             xor eax, eax
             not eax
@@ -626,12 +534,12 @@ S_ATA_PI:
             cmp ax, 0x3CC3
             jne .checkATABus.Disks.notSATA
 
-            mov esi, .SATA__Message-0x20000+1
+            mov esi, .SATA__Message+1
             push edx
 
             mov edx, edi
             xor eax, eax
-            mov al, [.SATA__Message-0x20000]
+            mov al, [.SATA__Message]
             mov edi, eax
             xor eax, eax
             not eax
@@ -658,12 +566,12 @@ S_ATA_PI:
 
             .checkATABus.Disks.notSATA:
 
-            mov esi, .UKNWN_Message-0x20000+1
+            mov esi, .UKNWN_Message+1
             push edx
 
             mov edx, edi
             xor eax, eax
-            mov al, [.UKNWN_Message-0x20000]
+            mov al, [.UKNWN_Message]
             mov edi, eax
             xor eax, eax
             not eax
@@ -690,12 +598,12 @@ S_ATA_PI:
             ret
 
         .checkATABus.Disks.error:
-            mov esi, .Error_Message-0x20000+1
+            mov esi, .Error_Message+1
             push edx
 
             mov edx, edi
             xor eax, eax
-            mov al, [.Error_Message-0x20000]
+            mov al, [.Error_Message]
             mov edi, eax
             xor eax, eax
             not eax
@@ -718,12 +626,12 @@ S_ATA_PI:
 
             .checkATABus.Disks.error.1:
 
-            mov esi, .Fail__Message-0x20000+1
+            mov esi, .Fail__Message+1
             push edx
 
             mov edx, edi
             xor eax, eax
-            mov al, [.Fail__Message-0x20000]
+            mov al, [.Fail__Message]
             mov edi, eax
             xor eax, eax
             not eax
@@ -743,13 +651,13 @@ S_ATA_PI:
             ret
 
         .checkATABus.Disks.noDisk:
-            mov esi, .noDiskMessage-0x20000+1
+            mov esi, .noDiskMessage+1
             push edi
             push edx
 
             mov edx, edi
             xor eax, eax
-            mov al, [.noDiskMessage-0x20000]
+            mov al, [.noDiskMessage]
             mov edi, eax
             xor eax, eax
             not eax
@@ -1199,14 +1107,15 @@ S_ATA_PI:
             popa
             ret
 
-    .Fail__Message: db .Error_Message-.Fail__Message-1, 10, "This device has encountered too many errors and will be skiped."
+    .Driver_Message_Prefix: db .Fail__Message-.Driver_Message_Prefix-1, 10, "S_ATA_PI: "
+    .Fail__Message: db .Error_Message-.Fail__Message-1, "This device has encountered too many errors and will be skipped."
     .Error_Message: db .noDiskMessage-.Error_Message-1, " has encountered an error."
     .noDiskMessage: db .SATA__Message-.noDiskMessage-1, " doesn't exist."
     .SATA__Message: db .ATAPI_Message-.SATA__Message-1, " is a SATA disk."
     .ATAPI_Message: db .UKNWN_Message-.ATAPI_Message-1, " is an ATAPI disk."
     .UKNWN_Message: db .ATA___Message-.UKNWN_Message-1, " is an unidentified device."
     .ATA___Message: db .noBus1Message-.ATA___Message-1, " is an ATA disk."
-    .noBus1Message: db .noBus2Message-.noBus1Message-1, 10, "(ATA:0) has no drives attached."
-    .noBus2Message: db .noBusOnMessage-.noBus2Message-1, 10, "(ATA:1) has no drives attached."
-    .noBusOnMessage: db .end-.noBusOnMessage-1, 10, "Both ATA buses have no drives attached. Halting."
+    .noBus1Message: db .noBus2Message-.noBus1Message-1, "(ATA:0) has no drives attached."
+    .noBus2Message: db .noBusOnMessage-.noBus2Message-1, "(ATA:1) has no drives attached."
+    .noBusOnMessage: db .end-.noBusOnMessage-1, "Both ATA buses have no drives attached. Halting."
     .end:

@@ -43,8 +43,8 @@ EDDV3Read:
 		mov si, 0x28
         mov ds, si
         mov eax, 0x00FFFFFF
-        mov esi, .USBMessage-0x20000+1
-        mov di, [.USBMessage-0x20000]
+        mov esi, .USBMessage+1
+        mov di, [.USBMessage]
         and di, 0xff
         xor ecx, ecx
 
@@ -56,8 +56,8 @@ EDDV3Read:
 		mov si, 0x28
         mov ds, si
         mov eax, 0x00FFFFFF
-        mov esi, .SCSIMessage-0x20000+1
-        mov di, [.SCSIMessage-0x20000]
+        mov esi, .SCSIMessage+1
+        mov di, [.SCSIMessage]
         and di, 0xff
         xor ecx, ecx
 
@@ -70,8 +70,8 @@ EDDV3Read:
 		mov si, 0x28
         mov ds, si
         mov eax, 0x00FFFFFF
-        mov esi, .FireWireMessage-0x20000+1
-        mov di, [.FireWireMessage-0x20000]
+        mov esi, .FireWireMessage+1
+        mov di, [.FireWireMessage]
         and di, 0xff
         xor ecx, ecx
 
@@ -83,8 +83,8 @@ EDDV3Read:
 		mov si, 0x28
         mov ds, si
         mov eax, 0x00FFFFFF
-        mov esi, .FibreMessage-0x20000+1
-        mov di, [.FibreMessage-0x20000]
+        mov esi, .FibreMessage+1
+        mov di, [.FibreMessage]
         and di, 0xff
         xor ecx, ecx
 
@@ -96,8 +96,8 @@ EDDV3Read:
 		mov si, 0x28
         mov ds, si
         mov eax, 0x00FFFFFF
-        mov esi, .ATAPIMessage-0x20000+1
-        mov di, [.ATAPIMessage-0x20000]
+        mov esi, .ATAPIMessage+1
+        mov di, [.ATAPIMessage]
         and di, 0xff
         xor ecx, ecx
 

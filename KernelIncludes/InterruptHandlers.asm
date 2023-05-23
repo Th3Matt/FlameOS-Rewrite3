@@ -1,10 +1,13 @@
 IRQHandlers:
     .timerInterrupt:
+        push eax
+
         call Print.refresh
 
         mov al, 0x20
         out 0x20, al  ; EOI
 
+        pop eax
         iret
 
     .timerInterrupt2:
@@ -55,63 +58,63 @@ SetUpInterrupts:
     mov ax, 0x20
     mov ds, ax
 
-    mov eax, Exceptions.UD-0x20000
-    mov bh, 10001110b ; DPL 0, Interrupt Gate
+    mov eax, Exceptions.UD
+    mov  bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0x6
     mov edx, 0x28 ; Kernel code
 
     call IDT.modEntry
 
-    mov eax, Exceptions.DF-0x20000
-    mov bh, 10001110b ; DPL 0, Interrupt Gate
+    mov eax, Exceptions.DF
+    mov  bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0x8
     mov edx, 0x28 ; Kernel code
 
     call IDT.modEntry
 
-    mov eax, Exceptions.TS-0x20000
-    mov bh, 10001110b ; DPL 0, Interrupt Gate
+    mov eax, Exceptions.TS
+    mov  bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0xA
     mov edx, 0x28 ; Kernel code
 
     call IDT.modEntry
 
-    mov eax, Exceptions.NP-0x20000
-    mov bh, 10001110b ; DPL 0, Interrupt Gate
+    mov eax, Exceptions.NP
+    mov  bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0xB
     mov edx, 0x28 ; Kernel code
 
     call IDT.modEntry
 
-    mov eax, Exceptions.SS-0x20000
-    mov bh, 10001110b ; DPL 0, Interrupt Gate
+    mov eax, Exceptions.SS
+    mov  bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0xC
     mov edx, 0x28 ; Kernel code
 
     call IDT.modEntry
 
-    mov eax, Exceptions.GP-0x20000
-    mov bh, 10001110b ; DPL 0, Interrupt Gate
+    mov eax, Exceptions.GP
+    mov  bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0xD
     mov edx, 0x28 ; Kernel code
 
     call IDT.modEntry
 
-    mov eax, IRQHandlers.timerInterrupt-0x20000
-    mov bh, 10001110b ; DPL 0, Task Gate
+    mov eax, IRQHandlers.timerInterrupt
+    mov  bh, 10001110b ; DPL 0, Task Gate
     mov ecx, 0x20 ; Timer IRQ
     mov edx, 0x28 ; Kernel code
 
     call IDT.modEntry
 
-    mov eax, Syscall.run-0x20000
-    mov bh, 11101110b ; DPL 3, Interrupt Gate
+    mov eax, Syscall.run
+    mov  bh, 11101110b ; DPL 3, Interrupt Gate
     mov ecx, 0x30 ; Syscall
     mov edx, 0x28 ; Kernel code
 
     call IDT.modEntry
 
-    mov word ds:[256*8], 256*8
+    mov word  ds:[256*8],   256*8
     mov dword ds:[256*8+2], 5000h
     lidt ds:[256*8]
 
@@ -128,7 +131,7 @@ SetUpTimer:
     mov ax, 0x48
     mov es, ax
 
-    mov es:[0x20], dword IRQHandlers.timerInterrupt2-0x20000
+    mov es:[0x20], dword IRQHandlers.timerInterrupt2
     mov ax, ss
     mov es:[0x50], ax
     mov es:[0x38], esp
@@ -258,9 +261,9 @@ Exceptions:
         loop $-5
 
         mov eax, 0x00ff0000
-        mov esi, .Exception-0x20000+2
+        mov esi, .Exception+2
         xor edi, edi
-        mov di, [.Exception-0x20000]
+        mov di, [.Exception]
 
         call Print.string
 
@@ -271,8 +274,8 @@ Exceptions:
 
         mov eax, 0x00fffffff
         ;mov edx, 800/20*(6)*21
-        mov esi, .Exception.2-0x20000+2
-        mov di, [.Exception.2-0x20000]
+        mov esi, .Exception.2+2
+        mov di, [.Exception.2]
         mov ecx, 0x00aa6600
         call Print.string
 
@@ -291,8 +294,8 @@ Exceptions:
 
         add edx, 5
 
-        mov esi, .Exception.3-0x20000+2
-        mov di, [.Exception.3-0x20000]
+        mov esi, .Exception.3+2
+        mov di, [.Exception.3]
         mov ecx, 0x00aa6600
         call Print.string
         xchg esp, ebp
@@ -308,8 +311,8 @@ Exceptions:
         call Print.newLine
         loop $-5
 
-        mov esi, .Exception.4-0x20000+2
-        mov di, [.Exception.4-0x20000]
+        mov esi, .Exception.4+2
+        mov di, [.Exception.4]
         mov ecx, 0x00aa6600
         call Print.string
 
@@ -334,8 +337,8 @@ Exceptions:
         call Print.newLine
         loop $-5
 
-        mov esi, .Exception.5-0x20000+2
-        mov di, [.Exception.5-0x20000]
+        mov esi, .Exception.5+2
+        mov di, [.Exception.5]
         mov ecx, 0x00aa6600
         call Print.string
 
@@ -353,8 +356,8 @@ Exceptions:
         loop $-5
 
         add edx, 800/20*21-(800/20/2-(.Exception.end-.Exception.6-2))*21
-        mov esi, .Exception.6-0x20000+2
-        mov di, [.Exception.6-0x20000]
+        mov esi, .Exception.6+2
+        mov di, [.Exception.6]
         mov ecx, 0x00aa6600
         call Print.string
         xchg esp, ebp

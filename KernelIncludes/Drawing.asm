@@ -90,12 +90,85 @@ Print:
         mul edx
         mov edx, eax
 
+        cmp edx, 80*50
+        jl .newLine.end
+
+        mov eax, [es:ScreenWidth]
+		mov ecx, 10
+		push edx
+		xor edx, edx
+        div ecx
+        pop edx
+
+        sub edx, eax
+
+        call .scrollDown
+
+        .newLine.end:
+
         pop es
 
 		pop ecx
 		pop eax
 
 		ret
+
+    .scrollDown:
+        pusha
+
+		push es
+
+		mov cx, 0x10
+		mov es, cx
+
+        mov eax, [es:ScreenWidth]
+		mov ecx, 10
+		xor edx, edx
+        div ecx
+        mov ecx, 9
+        mul ecx
+
+        mov esi, eax
+        xor edi, edi
+        mov ecx, 80*59*9/4
+
+        mov ax, 0xA0
+
+        push ds
+
+        mov ds, ax
+        mov es, ax
+
+        rep movsd
+
+        pop ds
+        pop es
+
+        popa
+        ret
+
+    .fillScreen: ; ecx - color
+        push ecx
+        push edi
+        push gs
+
+        mov ecx, 80*60
+        push eax
+        mov ax, 0xA0
+        mov gs, ax
+        pop eax
+        xor edi, edi
+
+        .fillScreen.loop:
+            mov byte [gs:edi], 0
+            mov dword [gs:edi+5], eax
+            add edi, 9
+            loop .fillScreen.loop
+
+        pop gs
+        pop edi
+        pop ecx
+        ret
 
     .char:	;eax - foreground color dword, ebx - Character #, ecx - background color dword, edx - Character location
         push ds
@@ -302,7 +375,7 @@ Print:
 
                 .refresh.print.0:
                     xor ecx, ecx
-                    mov cl, [es:eax+Font.FontLength+4-0x20000]
+                    mov cl, [es:eax+Font.FontLength+4]
 
                     .refresh.print.0.1:
 
@@ -426,6 +499,15 @@ Print:
 
                 jmp .refresh.print.0.1
 
+    .charSyscall: ;eax - foreground color dword, ecx - background color dword, edx - Character location, esi - Character #
+        push ebx
+        mov ebx, esi
+
+        call .char
+
+        pop ebx
+        ret
+
 Draw:
     .rectangle: ; eax - colour dword, bx - x1, ebx>>16 - y1, cx - x2, ecx>>16 - y2
         push edi
@@ -491,4 +573,3 @@ Draw:
             pop esi
             pop edi
             ret
-
