@@ -1,4 +1,14 @@
- 
+
+TMV.NextPlaceToPrintChar        equ TextModeVariableSpace ; 4 bytes
+
+SOB.currentlySelectedEntry      equ ScreenOwnershipBuffer ; 1 byte
+SOB.buffer                      equ SOB.currentlySelectedEntry+1 ; 8*1 bytes
+
+;SOB buffer entry structure
+    SOB.bufferEntry.flags       equ 0
+    SOB.bufferEntry.PID         equ 2
+    SOB.bufferEntry.segment     equ 6
+
 Print:
     .clearScreen:
         pusha
@@ -24,8 +34,59 @@ Print:
             add edi, 4
             loop .clearScreen.loop2
 
+
+        mov ax, 0x10
+        mov gs, ax
+        mov gs:[TMV.NextPlaceToPrintChar], dword 0
+
         pop gs
         popa
+        ret
+
+    .decCursorPos: ; eax - how much to decrease
+        push es
+        push edx
+        push eax
+        mov ax, 0x10
+        mov es, ax
+        pop eax
+
+        sub dword es:[TMV.NextPlaceToPrintChar], eax
+
+        pop edx
+        pop es
+        ret
+
+    .saveCurrentCursorPos:    ; edx - cursor position
+        push es
+        push edx
+        push eax
+        mov ax, 0x10
+        mov es, ax
+        pop eax
+
+        mov es:[TMV.NextPlaceToPrintChar], edx
+
+        pop edx
+        pop es
+        ret
+
+    .print:    ; eax - Pixel color, ecx - background color dword, esi - String start address, edi - String length, ds - string segment
+        push es
+        push edx
+        push eax
+        mov ax, 0x10
+        mov es, ax
+        pop eax
+
+        mov edx, es:[TMV.NextPlaceToPrintChar]
+
+        call .string
+
+        mov es:[TMV.NextPlaceToPrintChar], edx
+
+        pop edx
+        pop es
         ret
 
     .string:    ; eax - Pixel color, ecx - background color dword, edx - First char printing location, esi - String start address, edi - String length, ds - string segment
@@ -331,6 +392,39 @@ Print:
         push ds
         push es
         push fs
+
+        mov ax, 0x10
+        mov fs, ax
+
+        cmp bx, 0xFFFF
+        jz .refresh.textMode
+
+        cmp byte fs:[SOB.currentlySelectedEntry], 0
+        jz .refresh.textMode
+
+        xor ecx, ecx
+        mov cl, fs:[SOB.currentlySelectedEntry]
+        dec cl
+        shl cl, 2
+
+        mov ds, fs:[SOB.buffer+ecx+2]
+        ;mov cx, fs:[SOB.buffer+ecx]
+
+        mov ax, 0x38
+        mov es, ax
+
+        xor edi, edi
+        xor esi, esi
+        mov eax, fs:[ScreenWidth]
+        mul dword fs:[ScreenHeight]
+        mov ecx, eax
+
+        rep movsd
+
+        jmp .refresh.return
+
+        .refresh.textMode:
+
         push gs
 
         mov ax, 0xA0
@@ -338,9 +432,6 @@ Print:
 
         mov ax, 0x28
         mov es, ax
-
-        mov ax, 0x10
-        mov fs, ax
 
         mov ax, 0x38
         mov gs, ax
@@ -468,6 +559,9 @@ Print:
         pop ecx
 
         pop gs
+
+        .refresh.return:
+
         pop fs
         pop es
         pop ds
@@ -499,13 +593,78 @@ Print:
 
                 jmp .refresh.print.0.1
 
-    .charSyscall: ;eax - foreground color dword, ecx - background color dword, edx - Character location, esi - Character #
+    .charSyscall: ;eax - foreground color dword, ecx - background color dword, esi - Character #
         push ebx
+        push es
+        mov bx, 0x10
+        mov es, bx
+        mov edx, es:[TMV.NextPlaceToPrintChar]
+
         mov ebx, esi
 
         call .char
 
+        inc edx
+        mov es:[TMV.NextPlaceToPrintChar], edx
+
+        pop es
         pop ebx
+        ret
+
+    .newLineSyscall:
+        push es
+        push eax
+
+        mov ax, 0x10
+        mov es, ax
+
+        pop eax
+
+        mov edx, es:[TMV.NextPlaceToPrintChar]
+
+        call .newLine
+
+        mov es:[TMV.NextPlaceToPrintChar], edx
+
+        pop es
+        ret
+
+    .switchToGraphics: ; cl - PID, si - graphics segment
+        push ds
+        push eax
+
+        mov ax, 0x10
+        mov ds, ax
+
+        xor eax, eax
+        mov al, ds:[SOB.currentlySelectedEntry]
+        shl al, 2
+        inc byte ds:[SOB.currentlySelectedEntry]
+        mov byte ds:[SOB.buffer+eax], cl
+        mov byte ds:[SOB.buffer+eax+1], 00000000b
+        mov ds:[SOB.buffer+eax+2], si
+
+        pop eax
+        pop ds
+        ret
+
+    .switchBack:
+        push ds
+        push eax
+
+        mov ax, 0x10
+        mov ds, ax
+
+        xor eax, eax
+        mov al, ds:[SOB.currentlySelectedEntry]
+        shl al, 2
+        dec byte ds:[SOB.currentlySelectedEntry]
+        mov byte ds:[SOB.buffer+eax], 00000000b
+        mov byte ds:[SOB.buffer+eax+1], 00000000b
+        mov word ds:[SOB.buffer+eax+2], 0
+
+        pop eax
+        pop ds
         ret
 
 Draw:
@@ -573,3 +732,161 @@ Draw:
             pop esi
             pop edi
             ret
+
+    .writeChar: ; eax - foreground color dword, ecx - background color dword, edx - Character #, edi - character position, gs - framebuffer segment.
+        push edx
+        push edi
+        push esi
+        push fs
+        push es
+        push ecx
+
+        push eax
+        mov ax, 0x10
+        mov fs, ax
+
+        mov ax, 0x28
+        mov es, ax
+        pop eax
+
+        mov ecx, edx
+        xchg eax, ecx
+        mov edx, 25
+        mul edx
+        xchg ecx, eax
+        mov edx, ecx
+
+        xor ecx, ecx
+
+        .writeChar.print:
+            mov si, [es:edx+Font.FontLength+4]
+            and si, 0xff
+
+            test si, 1
+            jz .writeChar.print.1.1
+
+            mov [gs:edi], eax
+            jmp .writeChar.print.1
+
+            .writeChar.print.1.1:
+            push eax
+            add esp, 4
+            pop eax
+            mov [gs:edi], eax
+            push eax
+            sub esp, 4
+            pop eax
+
+            .writeChar.print.1:
+
+            test si, 2
+            jz .writeChar.print.2.1
+
+            mov [gs:edi+4], eax
+            jmp .writeChar.print.2
+
+            .writeChar.print.2.1:
+            push eax
+            add esp, 4
+            pop eax
+            mov [gs:edi+4], eax
+            push eax
+            sub esp, 4
+            pop eax
+
+            .writeChar.print.2:
+
+            push eax
+            mov eax, [fs:ScreenWidth]
+            shl eax, 2
+            add edi, eax
+            pop eax
+
+            test si, 100b
+            jz .writeChar.print.3.1
+
+            mov [gs:edi], eax
+            jmp .writeChar.print.3
+
+            .writeChar.print.3.1:
+            push eax
+            add esp, 4
+            pop eax
+            mov [gs:edi], eax
+            push eax
+            sub esp, 4
+            pop eax
+
+            .writeChar.print.3:
+
+            test si, 1000b
+            jz .writeChar.print.4.1
+
+            mov [gs:edi+4], eax
+            jmp .writeChar.print.4
+
+            .writeChar.print.4.1:
+            push eax
+            add esp, 4
+            pop eax
+            mov [gs:edi+4], eax
+            push eax
+            sub esp, 4
+            pop eax
+
+            .writeChar.print.4:
+
+            push eax
+            mov eax, [fs:ScreenWidth]
+            shl eax, 2
+            sub edi, eax
+            add edi, 2*4
+            pop eax
+
+            inc cl
+            inc edx
+
+            cmp cl, 5
+            jl .writeChar.print
+
+            xor cl, cl
+            inc ch
+
+            push eax
+            mov eax, [fs:ScreenWidth]
+            shl eax, 3
+            add edi, eax
+            sub edi, 5*2*4
+            pop eax
+
+            cmp ch, 5
+            jl .writeChar.print
+
+        pop ecx
+
+        pop es
+        pop fs
+        pop esi
+        pop edi
+        add edi, 5*2*4
+
+        pop edx
+        ret
+
+    .writeStr: ; eax - foreground color dword, ecx - background color dword, edx - string length, edi - string position, ds:esi - string address, gs - framebuffer segment.
+        push ebx
+        push edx
+
+        mov ebx, edx
+
+        .writeStr.loop:
+            mov dl, ds:[esi]
+            call .writeChar
+
+            inc esi
+            dec ebx
+            jnz .writeStr.loop
+
+        pop edx
+        pop ebx
+        ret

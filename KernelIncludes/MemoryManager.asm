@@ -82,12 +82,32 @@ MemoryManager:
         pop eax
         ret
 
-    .deleteLDTEntry: ; esi - LDT entry, ds - writable segment containing LDT.
-        push edx
+    .clearLDT: ; ecx - process ID, ds - writable segment containing LDT.
+        push esi
 
+        xor esi, esi
+
+        .clearLDT.loop:
+            call .deleteLDTEntry
+
+            add esi, 8
+            cmp esi, 0x200*8
+            jnl .clearLDT.loop
+
+        pop esi
+        ret
+
+    .deleteLDTEntry: ; ecx - Process ID, esi - LDT entry, ds - writable segment containing LDT.
+        push ecx
+        push esi
+
+        shl ecx, 3+8
+        and esi, !111b
+        add esi, ecx
         and byte [ds:esi+6], 0
 
-        pop edx
+        pop esi
+        pop ecx
         ret
 
     .memAlloc:    ; eax - process ID, ecx - requested blocks of 4 KiB. Output: eax - address of allocated space
@@ -156,7 +176,7 @@ MemoryManager:
                 cmp dword [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+8], 0
                 jnz .memAlloc.nextAlloc
 
-        shl edi, 5
+        shl edi, 3
 
         .memAlloc.getPosMidByte:
             cmp ebx, 0
@@ -230,8 +250,8 @@ MemoryManager:
         push es
         push esi
 
-        mov ax, 0x78
-        mov es, ax
+        mov cx, 0x78
+        mov es, cx
 
         mov ecx, (0x1000-0x200)/16
         xor esi, esi
@@ -435,51 +455,3 @@ MemoryManager:
         db "OUT OF MEMORY, so that sucks, I guess."
     .end:
 
-    .usermodeAllocate: ; ecx - requested blocks of 4 KiB
-        push eax
-        push ebx
-        push ecx
-        push edx
-        push edi
-
-        push ecx
-        call ProcessManager.getCurrentPID
-        mov eax, ecx
-        pop ecx
-        call .memAlloc
-        push eax
-
-        mov eax, 0x1000
-        mul ecx
-
-        mov ebx, eax
-        dec ebx
-        pop eax
-
-        mov edx, 3
-
-        push ds
-        mov si, 0x70
-        mov ds, si
-
-        call ProcessManager.getCurrentPID
-
-        call .createLDTEntry
-
-        or esi, 111b
-
-        mov es, si
-        xor edi, edi
-        xor eax, eax
-        mov ecx, ebx
-
-        rep stosb
-
-        pop ds
-        pop edi
-        pop edx
-        pop ecx
-        pop ebx
-        pop eax
-
-        ret

@@ -234,8 +234,18 @@ ProcessManager:
 
         xor [es:edi], ebx
 
-        inc ecx
-        call .resumeAppropriateProcesses
+        call .resumeWaitingProcesses
+
+        push eax
+        mov eax, ecx
+        call MemoryManager.memFreeAll
+        pop eax
+
+        mov bx, 0x70
+        push ds
+        mov ds, bx
+        call MemoryManager.clearLDT
+        pop ds
 
         dec dword [es:0xc]
 
@@ -251,7 +261,7 @@ ProcessManager:
             pop ebx
             ret
 
-    .resumeAppropriateProcesses: ; ecx - PID. Resumes processes waiting for another one to finish.
+    .resumeWaitingProcesses: ; ecx - PID. Resumes processes waiting for another one to finish.
         pusha
 
 		xor edi, edi
@@ -261,32 +271,34 @@ ProcessManager:
 		xor edx, edx
 		mov ebx, 1
 
-		.resumeAppropriateProcesses.search:
+		.resumeWaitingProcesses.search:
 			test eax, ebx
-			jnz .resumeAppropriateProcesses.found
+			jnz .resumeWaitingProcesses.found
 
-        .resumeAppropriateProcesses.search.continue:
+        .resumeWaitingProcesses.search.continue:
 			inc edx
 			shl ebx, 1
 
 			cmp edx, 32
-			jg .resumeAppropriateProcesses.done
-			jmp .resumeAppropriateProcesses.search
+			jg .resumeWaitingProcesses.done
+			jmp .resumeWaitingProcesses.search
 
-		.resumeAppropriateProcesses.found:
+		.resumeWaitingProcesses.found:
 			shl edx, 4
 
 			cmp dword [es:edx+0x20+0x8], ecx
-			jne .resumeAppropriateProcesses.search.continue
-
+			pushf
 			shr edx, 4
+			popf
+			jne .resumeWaitingProcesses.search.continue
+
 			xchg edx, ecx
 			call .resumeProcess
 			xchg edx, ecx
 
-			jmp .resumeAppropriateProcesses.search.continue
+			jmp .resumeWaitingProcesses.search.continue
 
-        .resumeAppropriateProcesses.done:
+        .resumeWaitingProcesses.done:
             popa
 
             ret
@@ -435,15 +447,20 @@ ProcessManager:
         ret
 
     .sheduler:
-        mov cx, 0x48               ; preparing to read from saved TSS
+        mov ax, 0x40
+		mov es, ax
+
+        mov ecx, [es:8]
+        call .setLDT
+
+        mov cx, 0x48               ; preparing to read from current TSS
         mov ds, cx
-        mov cx, (3<<3)+100b           ; reparing to write to saved TSS
+        mov cx, (3<<3)+100b           ; preparing to write to saved TSS
         mov es, cx
 
-        xor ecx, ecx
-        mov cx, 0x64               ; read 64 bytes
+        mov ecx, 0x68               ; read 64 bytes
 
-        mov esi, 0x64              ; selecting second TSS
+        mov esi, 0x68              ; selecting second TSS
         xor edi, edi
 
         rep movsb
@@ -478,7 +495,6 @@ ProcessManager:
 
         push eax
         push ecx
-
 
          call .setLDT
 
@@ -536,15 +552,3 @@ ProcessManager:
 
         ret
 
-    .processExit:
-        pusha
-
-        call .getCurrentPID
-        mov eax, ecx
-        cli
-        call MemoryManager.memFreeAll
-        call .stopProcess
-
-        sti
-        hlt
-        jmp $

@@ -445,6 +445,26 @@
     mov cl, 0x1
     mov [di], ecx
 
+    add di, 4
+                    ;---------------------B8       -      B8        -   BIOS Data
+                    ;80000 - 9FFFF
+    xor bx, bx
+    mov [di], bx
+
+    add di, 2
+
+    mov ax, 0xFFFF
+    mov [di], ax
+
+    add di, 2
+
+    xor ecx, ecx
+    mov ch, 01010001b
+    shl ecx, 8
+    mov ch, 10010010b
+    mov cl, 0x8
+    mov [di], ecx
+
     add di, 4       ;=====================
 
     mov si, di

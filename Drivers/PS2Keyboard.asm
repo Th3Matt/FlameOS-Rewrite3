@@ -1,4 +1,8 @@
- 
+
+KCB.writeCounter                equ KeyboardCircularBufferSpace
+KCB.readCounter                 equ KCB.writeCounter+1
+KCB.buffer                      equ KCB.readCounter+1 ; 48 bytes
+
 PS_2_Keyboard:
     .init:
         pusha

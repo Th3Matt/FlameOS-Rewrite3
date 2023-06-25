@@ -12,14 +12,17 @@ Syscall:
 
         rep stosd
 
-        mov dword es:[(0x0<<2)+4],  Print.string
+        mov dword es:[(0x0<<2)+4],  Print.print
         mov dword es:[(0x1<<2)+4],  Print.clearScreen
         mov dword es:[(0x2<<2)+4],  Print.charSyscall
-        mov dword es:[(0x3<<2)+4],  Print.newLine
+        mov dword es:[(0x3<<2)+4],  Print.newLineSyscall
+        mov dword es:[(0x4<<2)+4],  Print.decCursorPos
+        mov dword es:[(0x5<<2)+4],  Draw.writeChar
+        mov dword es:[(0x6<<2)+4],  Draw.writeStr
         mov dword es:[(0x20<<2)+4], ProcessManager.yield
-        mov dword es:[(0x21<<2)+4], ProgramLoader.quickLoad
-        mov dword es:[(0x22<<2)+4], ProcessManager.processExit
-        mov dword es:[(0x30<<2)+4], MemoryManager.usermodeAllocate
+        mov dword es:[(0x21<<2)+4], API.quickLoad
+        mov dword es:[(0x22<<2)+4], API.processExit
+        mov dword es:[(0x30<<2)+4], API.usermodeAllocate
 
         pop es
         popa

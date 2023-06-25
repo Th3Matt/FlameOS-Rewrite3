@@ -18,17 +18,21 @@ Builds/TBL.bin: ThirdBootloader.asm KernelIncludes/Constants.asm KernelIncludes/
 Builds/KRNL.bin: Kernel.asm Drivers/* KernelIncludes/*
 	nasm -fbin Kernel.asm -o "Builds/KRNL.bin"
 
-Builds/FS.bin: FilesystemHeader.asm FS/Term.asm
+Builds/FS.bin: FilesystemHeader.asm FS/Term.asm FS/Snake.asm
 	nasm -fbin FilesystemHeader.asm -o "Builds/FS.bin"
 	nasm -fbin FS/Term.asm -o "Builds/Term.bin"
+	nasm -fbin FS/Snake.asm -o "Builds/Snake.bin"
 	dd if="Builds/Term.bin" of="Builds/FS.bin" bs=512 seek=4 conv=notrunc
+	dd if="Builds/Snake.bin" of="Builds/FS.bin" bs=512 seek=8 conv=notrunc
 
 Builds/OS.bin: Builds/FBL.bin Builds/BL.bin Builds/TBL.bin Builds/KRNL.bin Builds/FS.bin
-	dd if="Builds/FBL.bin" of="Builds/OS.bin" bs=512 conv=notrunc
-	dd if="Builds/BL.bin" of="Builds/OS.bin" bs=512 seek=1 conv=notrunc
-	dd if="Builds/TBL.bin" of="Builds/OS.bin" bs=512 seek=2 conv=notrunc
-	dd if="Builds/KRNL.bin" of="Builds/OS.bin" bs=512 seek=7 conv=notrunc
-	dd if="Builds/FS.bin" of="Builds/OS.bin" bs=512 seek=50 conv=notrunc
+	#dd if="Builds/FBL.bin" of="Builds/OS.bin" bs=512 conv=notrunc
+	#dd if="Builds/BL.bin" of="Builds/OS.bin" bs=512 seek=1 conv=notrunc
+	#dd if="Builds/TBL.bin" of="Builds/OS.bin" bs=512 seek=2 conv=notrunc
+	#dd if="Builds/KRNL.bin" of="Builds/OS.bin" bs=512 seek=7 conv=notrunc
+	#dd if="Builds/FS.bin" of="Builds/OS.bin" bs=512 seek=50 conv=notrunc
+	if test -f "Builds/OS.bin"; then rm "Builds/OS.bin"; fi
+	cat Builds/FBL.bin Builds/BL.bin Builds/TBL.bin Builds/KRNL.bin Builds/FS.bin >> Builds/OS.bin
 
 qemu: Builds/FlameOS.img
 	qemu-system-x86_64 -vga std -drive file=Builds/FlameOS.img,format=raw

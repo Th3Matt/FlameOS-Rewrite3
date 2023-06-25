@@ -28,7 +28,7 @@ ProgramLoader:
         call MemoryManager.memAlloc
 
         shl ebx, 4+4+3
-        add ebx, eax
+        ;add ebx, eax
         pop ecx
         ;xor edx, edx
 
@@ -75,6 +75,7 @@ ProgramLoader:
             call ProcessManager.stopProcess
             stc
             pop esi ; pop ebx
+            pop ds
             pop esi
             pop fs
             pop edx
@@ -84,6 +85,7 @@ ProgramLoader:
 
     .exec: ; eax - UserID, ecx - Process ID, edx - cpu ring
         push eax
+        push ecx
         push ds
         push ebx
         push edx
@@ -119,28 +121,78 @@ ProgramLoader:
         call MemoryManager.createLDTEntry ; Creating SS
 
         push fs
-        mov dx, 0x8
-        mov fs, dx
+
+        mov ax, 0x0
+        mov fs, ax
 
         call ProcessManager.setLDT
 
-        mov dx, 0+4+0
-        mov ds, dx
+        mov ax, 0+4+0
+        mov ds, ax
 
+        push es
+        mov ax, 0x0
+        mov es, ax
+
+        push edx
         mov edx, [ds:0]
 
         shl esi, 16
         or esi, ((4+3)<<16)+0+4+3
 
-        push es
-        mov ax, 0x8
-        mov es, ax
         mov eax, 0x400
         mov ebx, eax
 
         call ProcessManager.setUpTask
+        pop edx
 
         push ecx
+
+        test dword [ds:4], 1b ; checking if program requests graphical framebuffer
+        jz .exec.continue
+
+        push ds
+        mov ax, 0x70
+        mov ds, ax
+
+        push edx
+        mov eax, ecx
+        push ecx
+        mov ecx, 469 ; 800*600*4/0x1000 rounded up
+
+        call MemoryManager.memAlloc
+
+        mov ecx, ebx
+        mov ebx, 0x1000*469-1
+        ;xor edx, edx
+        pop ecx
+        pop edx
+
+        push esi
+        call MemoryManager.createLDTEntry ; Creating GS
+
+        call Draw.addFramebuffer
+
+        mov ax, (3<<3)+4
+        mov es, ax
+
+        or si, 11b
+        mov es:[0x5C], si
+
+        mov es, si
+        xor eax, eax
+        mov ecx, 800*600
+
+        rep stosd
+
+        pop esi
+        pop ds
+
+        mov ax, 0x0
+        mov es, ax
+
+        .exec.continue:
+
         call ProcessManager.getCurrentPID
         call ProcessManager.setLDT
         pop ecx
@@ -158,36 +210,7 @@ ProgramLoader:
 
         pop ebx
         pop ds
+        pop ecx
         pop eax
 
         ret
-
-    .quickLoad: ; ds:esi - path to executable.
-        push edx
-        xor eax, eax
-        mov edx, 0x3
-
-        call .load
-        jc .quickLoad.error
-
-        cli
-
-        call .exec
-
-        mov eax, ecx
-        call ProcessManager.getCurrentPID
-
-        call ProcessManager.pauseProcess
-
-        sti
-        hlt
-
-        xor eax, eax
-        pop edx
-        ret
-
-        .quickLoad.error:
-            mov eax, ebx
-
-            pop edx
-            ret

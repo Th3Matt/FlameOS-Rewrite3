@@ -19,10 +19,10 @@ ThirdBootloaderSize equ 0x5 ; in sectors
     ; FlameFS partition info
         FlPartitionInfo.firstSector     equ CustomSetting+2  ; 8 bytes
 
-    DiskDriverVariableSpace             equ FlPartitionInfo.firstSector+0x7E
-    PCIDriverVariableSpace              equ DiskDriverVariableSpace+0x50
+    DiskDriverVariableSpace             equ FlPartitionInfo.firstSector+0x7E ; 0x50 bytes
+    PCIDriverVariableSpace              equ DiskDriverVariableSpace+0x50     ; 0x50 bytes
+    KeyboardCircularBufferSpace         equ PCIDriverVariableSpace+0x50      ; 0x32 bytes
 
-    ; Keyboard Circular Buffer
-        KCB.writeCounter                equ PCIDriverVariableSpace+0x50
-        KCB.readCounter                 equ KCB.writeCounter+1
-        KCB.buffer                      equ KCB.readCounter+1 ; 48 bytes
+    TextModeVariableSpace               equ KeyboardCircularBufferSpace+0x32 ; 0x10 bytes
+    ScreenOwnershipBuffer               equ TextModeVariableSpace+0x10       ; 1+8 bytes
+    ACPIDriverVariableSpace             equ ScreenOwnershipBuffer+9

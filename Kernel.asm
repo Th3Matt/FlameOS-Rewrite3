@@ -34,6 +34,8 @@ ClearScreen:
 
 KERNEL:
 	.loading:
+		mov es:[SOB.currentlySelectedEntry], byte 0
+
 		mov eax, 0xFFFFFFFF
 		xor edx, edx
 		mov dl, [StartupText]
@@ -181,6 +183,9 @@ KERNEL:
         jc NoBootFile
         cmp al, fs:[4]
         jnz NoBootFile
+
+        push edx
+
         call FlFS.getFileInfo
         push eax
 
@@ -223,7 +228,13 @@ KERNEL:
         hlt
         cli
 
+        pop edx
+
         call SetUpTimer
+
+        call Print.saveCurrentCursorPos
+        call Print.newLineSyscall
+        call Print.newLineSyscall
 
 		sti
 		hlt
@@ -387,8 +398,9 @@ IDTloaded:	  db (.end-$-1), "Kernel: IDT initialised."
 %include "KernelIncludes/ProcessManager.asm"
 %include "KernelIncludes/MemoryManager.asm"
 %include "KernelIncludes/ProgramLoader.asm"
+%include "KernelIncludes/API.asm"
 %include "KernelIncludes/Syscall.asm"
 %include "KernelIncludes/Constants.asm"
 %include "KernelIncludes/DeviceListTools.asm"
 
-times 0x200*(0x30-2)-($-$$) db 0
+times 0x200*(0x30-ThirdBootloaderSize)-($-$$) db 0

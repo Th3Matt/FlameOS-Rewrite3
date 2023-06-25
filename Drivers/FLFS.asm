@@ -22,7 +22,7 @@ FlFS:
         pop es
         push ebx
 
-        mov ecx, 1
+        mov ecx, 5
         xor edi, edi
 
         call S_ATA_PI.readSectors

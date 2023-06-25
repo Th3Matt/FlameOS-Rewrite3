@@ -3,7 +3,8 @@
 
 
 INFO:
-	.Entrypoint: 	dd 0x200
+	.Entrypoint: 	dd Terminal
+	.Flags:         dd 00000000000000000000000000000000b
 
 times 512-($-$$) db 0
 
@@ -12,9 +13,6 @@ Terminal:
     mov ebx, 0x30
     int 0x30
     mov fs, si
-
-    mov ebx, 1
-    int 0x30
 
     dec ebx
     mov ax, 0x0+4
@@ -25,7 +23,22 @@ Terminal:
 
     mov ebx, 0x10
     int 0x30
-    xor edx, edx
+
+    xor eax, eax
+    not eax
+
+    mov esi, StartupText+1
+    xor ecx, ecx
+    mov cl, [esi-1]
+    mov edi, ecx
+
+    xor ebx, ebx
+    xor ecx, ecx
+
+    int 0x30
+
+    mov ebx, 0x3
+    int 0x30
 
     .prompt:
         xor eax, eax
@@ -122,7 +135,9 @@ Terminal:
         cmp edi, 0
         jz .loop
         dec edi
-        dec edx
+        mov ebx, 4
+        mov eax, 1
+        int 0x30
 
         xor esi, esi
         dec word fs:[1]
@@ -134,6 +149,10 @@ Terminal:
         mov ebx, 0x2
         xor ecx, ecx
 
+        int 0x30
+
+        mov ebx, 4
+        mov eax, 1
         int 0x30
 
         jmp .loop
@@ -149,6 +168,11 @@ Terminal:
         mov esi, 3
         cmp word ds:[1], 0
         jz .enter.cleanup
+
+        inc esi
+        call .checkCommands
+        jz .enter.cleanup
+        dec esi
 
         mov ebx, 0x21
         int 0x30
@@ -189,14 +213,62 @@ Terminal:
 
         jmp .prompt
 
+    .checkCommands:
+        push es
+        push cs
+        pop es
+        mov edi, ExitCommand
+
+        call CompareString
+        jnz .checkCommands.1
+
+        mov ebx, 0x22
+        int 0x30
+
+        .checkCommands.1:
+
+        .checkCommands.end:
+        pop es
+        ret
+
     jmp $
 
-Prompt: db .end-Prompt, "FlameShell | "
+CompareString: ; ds:esi - string 1 address, es:edi - string 2 address. Output: ZF set if equal.
+    push eax
+    push esi
+    push edi
+
+    .loop:
+        lodsb
+        cmp al, 0
+        jz .zero
+
+        cmp al, es:[edi]
+        jne .notEqual
+
+        inc edi
+        jmp .loop
+
+    .zero:
+        cmp al, es:[edi]
+
+    .notEqual:
+        pop edi
+        pop esi
+        pop eax
+
+        ret
+
+StartupText: db .end-StartupText-1, "FlameShell v1.0 started."
     .end:
 
-
-FileNotFound: db .end-FileNotFound, "FlameShell: File not found."
+Prompt: db .end-Prompt-1, "FlameShell | "
     .end:
+
+FileNotFound: db .end-FileNotFound-1, "FlameShell: File not found."
+    .end:
+
+ExitCommand: db "exit", 0
 
 ScancodeDecoder:
     db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0

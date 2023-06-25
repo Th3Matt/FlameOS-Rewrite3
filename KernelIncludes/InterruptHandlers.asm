@@ -23,7 +23,6 @@ IRQHandlers:
             jmp .timerInterrupt2.return
 
         .timerInterrupt2.notEnoughTasks:     ; Not enough tasks to switch between
-            mov al, byte [es:0x10]
             test byte [es:0x10], 00000001b
             jnz .timerInterrupt2.return
 
@@ -31,6 +30,8 @@ IRQHandlers:
             call ProcessManager.sheduler.skipWrite
 
         .timerInterrupt2.return:
+            xor ebx, ebx
+
             call Print.refresh ; this will (probably) be temporary
 
             mov al, 0x20
@@ -184,8 +185,14 @@ Exceptions:
     .panicScreen:
         pusha
 
+        push gs
+        mov ax, 0x38
+        mov gs, ax
+
+
         call Print.clearScreen
 
+        pop gs
         mov ax, 0x38
         mov es, ax
         mov gs, ax
@@ -363,10 +370,11 @@ Exceptions:
         xchg esp, ebp
 
         pop ecx
-        mov esp, ebp ; Using only handler stack
+        mov esp, ebp ; Using only hadler stack
 
         call Print.hex32
 
+        mov bx, 0xFFFF
         call Print.refresh
 
         jmp $
