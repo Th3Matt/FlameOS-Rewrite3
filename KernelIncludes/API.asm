@@ -45,18 +45,22 @@ API:
 
         call ProcessManager.getCurrentPID
         cli
+        xor ebx, ebx
+        mov ds, bx
         call ProcessManager.stopProcess
+
+        call Print.delFramebuffer
 
         mov ax, 0x40
         mov es, ax
 
-        and byte es:[0x10], 0xFE
+        and dword es:[PMDB.flags], 0xFFFFFFFE
 
         sti
         hlt
         jmp $-1
 
-    .usermodeAllocate: ; ecx - requested blocks of 4 KiB
+    .usermodeAllocate: ; ecx - requested blocks of 4 KiB. Output: si - segment.
         push eax
         push ebx
         push ecx
@@ -89,12 +93,14 @@ API:
 
         or esi, 111b
 
+        push es
         mov es, si
         xor edi, edi
         xor eax, eax
         mov ecx, ebx
 
         rep stosb
+        pop es
 
         pop ds
         pop edi
@@ -103,4 +109,56 @@ API:
         pop ebx
         pop eax
 
+        ret
+
+    .loadFile: ; ds:esi - path to executable. Output: si - file segment
+        push eax
+        push ebx
+        push ecx
+        push edx
+
+        push edx
+        xor ebx, ebx
+        call VFS.getFileInfo
+        pop edx
+        jc .loadFile.error
+        push esi
+        push eax
+
+        mov ecx, ebx
+        shr ecx, 1+2
+        inc ecx
+
+        call .usermodeAllocate
+
+        pop eax
+        mov fs, si
+        pop esi
+        xor edi, edi
+        xor ebx, ebx
+
+        call VFS.readFile
+
+        xor esi, esi
+        mov si, fs
+
+        xor eax, eax
+        clc
+        jmp .loadFile.end
+
+        .loadFile.error:
+            mov eax, 1
+            stc
+
+        .loadFile.end:
+            pop edx
+            pop ecx
+            pop ebx
+            pop eax
+            ret
+
+    .yield:
+        sti
+        hlt
+        cli
         ret

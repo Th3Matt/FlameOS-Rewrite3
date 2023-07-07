@@ -44,8 +44,6 @@ ProgramLoader:
         push ds
         push ebx
 
-        call ProcessManager.setLDT
-
         push es
         mov ax, 0x8
         mov es, ax
@@ -55,11 +53,6 @@ ProgramLoader:
 
         xor esi, esi
         mov si, ds
-
-        push ecx
-        call ProcessManager.getCurrentPID
-        call ProcessManager.setLDT
-        pop ecx
 
         pop es
         pop ebx
@@ -171,7 +164,7 @@ ProgramLoader:
         push esi
         call MemoryManager.createLDTEntry ; Creating GS
 
-        call Draw.addFramebuffer
+        call Print.addFramebuffer
 
         mov ax, (3<<3)+4
         mov es, ax

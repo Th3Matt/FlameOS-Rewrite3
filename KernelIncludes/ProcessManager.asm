@@ -1,4 +1,11 @@
 
+; Process Manager Data Blob
+    PMDB.activeProcessMask            equ 0                                   ; 4 bytes ; dword
+    PMDB.shedulerCurrentProcessMask   equ PMDB.activeProcessMask+4            ; 4 bytes ; dword
+    PMDB.shedulerCurrentProcessNumber equ PMDB.shedulerCurrentProcessMask+4   ; 4 bytes ; dword
+    PMDB.ammoutOfActiveProcesses      equ PMDB.shedulerCurrentProcessNumber+4 ; 4 bytes ; dword
+    PMDB.flags                        equ PMDB.ammoutOfActiveProcesses+4      ; 4 bytes ; dword
+
 ProcessManager:
 	.init:
 		push es
@@ -13,7 +20,7 @@ ProcessManager:
 		xor edi, edi
 
 		rep stosb ;[edi]
-        dec dword [es:0xc]
+        dec dword [es:PMDB.ammoutOfActiveProcesses] ; hiding the kernel process
 
 		mov cx, 0x70 ; Clearing LDT lists
 		mov es, cx
@@ -40,7 +47,7 @@ ProcessManager:
 		xor edi, edi
 		mov ax, 0x40
 		mov es, ax
-		mov eax, [es:edi]
+		mov eax, [es:edi] ; read current process list dword
 		xor ecx, ecx
 		mov ebx, 1
 
@@ -86,7 +93,7 @@ ProcessManager:
 		xor edi, edi
 		mov ax, 0x40
 		mov es, ax
-		mov eax, [es:edi]
+		mov eax, [es:edi] ; read current process list dword
 		xor ecx, ecx
 		mov ebx, 1
 
@@ -114,7 +121,7 @@ ProcessManager:
 			mov dword [es:eax+0x20+0x4], ebx
 			mov dword [es:eax+0x20+0x8], ebx
 			
-            inc dword [es:0xc]
+            inc dword [es:PMDB.ammoutOfActiveProcesses]
 
             pop eax
             pop ebx
@@ -247,7 +254,7 @@ ProcessManager:
         call MemoryManager.clearLDT
         pop ds
 
-        dec dword [es:0xc]
+        dec dword [es:PMDB.ammoutOfActiveProcesses]
 
         clc
         pop es
@@ -410,6 +417,13 @@ ProcessManager:
         mov ax, (3<<3)+4
         mov es, ax
 
+        push edi
+        xor edi, edi
+        mov ecx, 0x64/4
+        xor eax, eax
+        rep stosd
+        pop edi
+
         pop ecx
         shl ecx, 4
 
@@ -450,7 +464,7 @@ ProcessManager:
         mov ax, 0x40
 		mov es, ax
 
-        mov ecx, [es:8]
+        mov ecx, [es:PMDB.shedulerCurrentProcessNumber]
         call .setLDT
 
         mov cx, 0x48               ; preparing to read from current TSS
@@ -465,17 +479,17 @@ ProcessManager:
 
         rep movsb
 
-        .sheduler.skipWrite:
+        .sheduler.skipWrite: ; sheduler entry point for when we don't need to save previous task context
 
         mov ax, 0x40
 		mov es, ax
 
-        mov ecx, [es:8]             ; get task #
-		mov eax, [es:4]             ; get saved mask
+        mov ecx, [es:PMDB.shedulerCurrentProcessNumber]           ; get task #
+		mov eax, [es:PMDB.shedulerCurrentProcessMask]             ; get saved mask
 
 		.sheduler.shiftMask:
             inc ecx
-            shl eax, 1
+            shl eax, 1              ; go to next process slot
             jnz .sheduler.checkSlot
 
 		.sheduler.setTo1:
@@ -483,10 +497,10 @@ ProcessManager:
             mov ecx, 0              ; reset task #
 
         .sheduler.checkSlot:
-            cmp eax, [es:4]
+            cmp eax, [es:PMDB.shedulerCurrentProcessMask] ; check if we wrapped back around to where we started
             stc
             jz .sheduler.return
-            test [es:0], eax        ; check process slot
+            test [es:PMDB.activeProcessMask], eax        ; check process slot
             jz .sheduler.shiftMask
             mov ebx, ecx
             shl ebx, 4
@@ -501,7 +515,7 @@ ProcessManager:
          mov cx, 0x48               ; preparing to write to TSS
          mov es, cx
 
-         mov es:[0x00], word 0x58
+         mov es:[PMDB.activeProcessMask], word 0x58
 
          mov cx, (3<<3)+100b           ; reparing to read from saved TSS
          mov ds, cx
@@ -521,8 +535,8 @@ ProcessManager:
         pop eax
 
 
-        mov [es:4], eax             ; save mask
-        mov [es:8], ecx             ; save task #
+        mov [es:PMDB.shedulerCurrentProcessMask], eax             ; save mask
+        mov [es:PMDB.shedulerCurrentProcessNumber], ecx           ; save task #
 
 		clc
 
@@ -532,23 +546,16 @@ ProcessManager:
         .sheduler.return:
             ret
 
-    .yield:
-        sti
-        hlt
-        cli
-        ret
-
-    .getCurrentPID: ; ecx - PID
+    .getCurrentPID: ; Output: ecx - PID
         push eax
         push es
 
         mov ax, 0x40
 		mov es, ax
 
-        mov ecx, [es:8]
+        mov ecx, [es:PMDB.shedulerCurrentProcessNumber]
 
         pop es
         pop eax
 
         ret
-

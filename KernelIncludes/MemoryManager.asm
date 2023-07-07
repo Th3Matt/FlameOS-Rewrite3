@@ -1,5 +1,5 @@
  
-ALLOCATABLE_SPACE_TABLE_SIZE equ 511>>2 ; ((4*1024-1)*1024-(0xffff/1024))/8/1024
+ALLOCATABLE_SPACE_TABLE_SIZE equ 0x7FF8
 
 MemoryManager:
     .init:
@@ -11,7 +11,7 @@ MemoryManager:
 
 		xor edi, edi
 
-		mov ecx, (0x8900-0x7900)/4
+		mov ecx, (0x40000-0x26000)/4
 		xor eax, eax
 
 		rep stosd
@@ -45,7 +45,7 @@ MemoryManager:
 
         .createLDTEntry.loop: ; Finding free LDT entry
             add esi, 8
-            test byte [ds:esi+6], 10000000b
+            test byte [ds:esi+5], 10000000b
             jnz .createLDTEntry.loop
 
         shr ebx, 12
@@ -92,7 +92,7 @@ MemoryManager:
 
             add esi, 8
             cmp esi, 0x200*8
-            jnl .clearLDT.loop
+            jle .clearLDT.loop
 
         pop esi
         ret
@@ -102,9 +102,9 @@ MemoryManager:
         push esi
 
         shl ecx, 3+8
-        and esi, !111b
+        and esi, 111111111111111111111111111000b
         add esi, ecx
-        and byte [ds:esi+6], 0
+        and byte [ds:esi+5], 0
 
         pop esi
         pop ecx
@@ -137,7 +137,7 @@ MemoryManager:
 
 		.memAlloc.setTo1:
             mov eax, 1              ; reset mask
-            inc edi
+            add edi, 4
             cmp edi, ALLOCATABLE_SPACE_TABLE_SIZE
             jz .memAlloc.outOfMemory
 
@@ -157,14 +157,14 @@ MemoryManager:
             jnz .memAlloc.setBits.2
 
             cmp edx, ecx
-            jz .memAlloc.writeAllocation
+            jnl .memAlloc.writeAllocation
 
             mov eax, 80000000h
-            dec edi
+            sub edi, 4
 
         .memAlloc.setBits.2:
             cmp edx, ecx
-            jnz .memAlloc.setBits
+            jl .memAlloc.setBits
 
 		.memAlloc.writeAllocation:
             mov ebx, eax
@@ -176,7 +176,7 @@ MemoryManager:
                 cmp dword [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+8], 0
                 jnz .memAlloc.nextAlloc
 
-        shl edi, 3
+        shl edi, 5-2 ; encoding
 
         .memAlloc.getPosMidByte:
             cmp ebx, 0
@@ -241,6 +241,7 @@ MemoryManager:
 
             call Print.string
 
+            mov bx, 0xFFFF
             call Print.refresh
             jmp $
 
@@ -298,6 +299,14 @@ MemoryManager:
         mov ebx, [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+8]
         add ecx, ebx
 
+        push cx     ; deencoding
+        shr ecx, 5
+        shl ecx, 7
+        xor eax, eax
+        pop ax
+        and eax, 11111b
+        add ecx, eax
+
         push ecx
 
         mov eax, 1
@@ -318,7 +327,7 @@ MemoryManager:
             jnz .memFree.clearBits
 
             mov eax, 80000000h
-            dec ecx
+            sub ecx, 4
             jmp .memFree.clearBits
 
         .memFree.clearAllocation:
@@ -349,15 +358,7 @@ MemoryManager:
         pusha
         push ds
 
-        push es
-        mov ax, 0x38
-        mov es, ax
-        xor edi, edi
-
-        mov ecx, 800*600
-        xor eax, eax
-        rep stosd
-        pop es
+        call Print.clearScreen
 
         mov ax, 0x28
         mov ds, ax
@@ -377,8 +378,8 @@ MemoryManager:
         mov cx, 0x78
         mov es, cx
 
-        mov ecx, 4
-        xor ebx, ebx
+        mov ecx, 18
+        mov ebx, ALLOCATABLE_SPACE_TABLE_SIZE
 
         .memAllocPrint.PrintEntries:
             call .memAllocPrint.drawEntry
@@ -392,13 +393,19 @@ MemoryManager:
 
         .memAllocPrint.drawEntry: ; ebx - entry
             push ecx
+            push ebx
+            xor ebx, ebx
+
             mov esi, .memTableEntry+1
             mov edi, 4
             xor ecx, ecx
 
             call Print.string
 
-            mov ecx, [es:ebx+ALLOCATABLE_SPACE_TABLE_SIZE]
+            pop ebx
+            mov ecx, [es:ebx]
+            push ebx
+            xor ebx, ebx
 
             call Print.hex32
 
@@ -408,7 +415,10 @@ MemoryManager:
 
             call Print.string
 
-            mov ecx, [es:ebx+ALLOCATABLE_SPACE_TABLE_SIZE+12]
+            pop ebx
+            mov ecx, [es:ebx+12]
+            push ebx
+            xor ebx, ebx
 
             call Print.hex32
 
@@ -418,7 +428,19 @@ MemoryManager:
 
             call Print.string
 
-            mov ecx, [es:ebx+ALLOCATABLE_SPACE_TABLE_SIZE+8]
+            pop ebx
+
+            mov ecx, [es:ebx+8]
+            push eax
+            push edx
+            mov eax, 0x1000
+            mul ecx
+            mov ecx, eax
+            pop edx
+            pop eax
+
+            push ebx
+            xor ebx, ebx
 
             call Print.hex32
 
@@ -436,6 +458,7 @@ MemoryManager:
 
             call Print.string
 
+            pop ebx
             pop ecx
             ret
 

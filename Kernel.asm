@@ -383,6 +383,60 @@ StartupText:  db (.end-$-1), "Kernel: FlameOS Starting up...", 10
 IDTloaded:	  db (.end-$-1), "Kernel: IDT initialised."
 	.end:
 
+DebugMode:
+	.start:
+		push eax
+		push es
+
+		mov ax, 0x40
+		mov es, ax
+
+		or dword es:[PMDB.flags], 10b ; turn on debug mode
+
+		pop es
+		pop eax
+		ret
+
+	.main:
+		pusha
+		push ds
+
+		mov ax, 0x20
+		mov ds, ax
+
+		mov eax, IRQHandlers.timerInterruptForcedTextMode
+		mov  bh, 10001110b ; DPL 0, Interrupt Gate
+		mov ecx, 0x20 ; Timer IRQ
+		mov edx, 0x28 ; Kernel code
+
+		call IDT.modEntry
+
+		sti
+
+		call MemoryManager.memAllocPrint
+
+		hlt
+		jmp $-1 ; TODO: implement this
+
+		cli
+
+		xor eax, eax ; Clearing handler address
+		mov bh, 10000101b ; DPL 0, Task Gate
+		mov ecx, 0x20 ; Timer IRQ
+		mov edx, 0x50 ; TSS 1
+
+		call IDT.modEntry
+
+		mov ax, 0x40
+		mov es, ax
+
+		and dword es:[PMDB.flags], 0xFFFFFFFD ; turn off debug mode
+
+		pop ds
+		popa
+
+		ret
+
 %include "Drivers/VGA.asm"
 %include "Drivers/ATA.asm"
 %include "Drivers/PCI.asm"

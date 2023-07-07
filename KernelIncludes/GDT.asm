@@ -287,22 +287,22 @@
 
     add di, 4
                     ;---------------------78       -      78         -   MemAlloc Data
-                    ;7900 - 88ff
-    mov ax, 0xfff
+                    ;26000 - 3ffff
+    mov ax, 0x9fff
     mov [di], ax
 
     add di, 2
 
-    mov ax, 0x7900
+    mov ax, 0x6000
     mov [di], ax
 
     add di, 2
 
     xor ecx, ecx
-    mov ch, 01010000b
+    mov ch, 01010001b
     shl ecx, 8
     mov ch, 10010010b
-    ;mov cl, 0x0
+    mov cl, 0x2
     mov [di], ecx
 
     add di, 4

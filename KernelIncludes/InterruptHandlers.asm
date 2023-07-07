@@ -10,12 +10,35 @@ IRQHandlers:
         pop eax
         iret
 
+    .timerInterruptForcedTextMode:
+        push eax
+
+        mov bx, 0xFFFF
+        call Print.refresh
+
+        mov al, 0x20
+        out 0x20, al  ; EOI
+
+        pop eax
+        iret
+
     .timerInterrupt2:
 
-		cmp [es:0xc], byte 0
+        test dword [es:PMDB.flags], 00000010b
+        jz .timerInterrupt2.notDebug
+
+        mov al, 0x20
+        out 0x20, al  ; EOI
+
+        call DebugMode.main
+        jmp .timerInterrupt2.return.end
+
+        .timerInterrupt2.notDebug:
+
+		cmp [es:PMDB.ammoutOfActiveProcesses], dword 0
 		jz .timerInterrupt2.stopPC
 
-		cmp [es:0xc], byte 2
+		cmp [es:PMDB.ammoutOfActiveProcesses], dword 2
 		jb .timerInterrupt2.notEnoughTasks
 
             call ProcessManager.sheduler
@@ -23,25 +46,26 @@ IRQHandlers:
             jmp .timerInterrupt2.return
 
         .timerInterrupt2.notEnoughTasks:     ; Not enough tasks to switch between
-            test byte [es:0x10], 00000001b
+            test dword [es:PMDB.flags], 00000001b ; check if we need to update task context
             jnz .timerInterrupt2.return
 
-            xor byte [es:0x10], 00000001b
+            xor dword [es:PMDB.flags], 00000001b
             call ProcessManager.sheduler.skipWrite
 
         .timerInterrupt2.return:
             xor ebx, ebx
 
-            call Print.refresh ; this will (probably) be temporary
+            call Print.refresh ; TODO: fix this.
 
             mov al, 0x20
             out 0x20, al  ; EOI
 
+            .timerInterrupt2.return.end:
             iret
             jmp .timerInterrupt2 ; fix for a bug with tss
 
         .timerInterrupt2.stopPC:             ; No more tasks to execute, check whether to restart or shut down the computer
-            jmp $                           ; Currently just stop execution
+            jmp $                           ; TODO: implement
 
 SetUpInterrupts:
     pusha
@@ -102,7 +126,7 @@ SetUpInterrupts:
     call IDT.modEntry
 
     mov eax, IRQHandlers.timerInterrupt
-    mov  bh, 10001110b ; DPL 0, Task Gate
+    mov  bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0x20 ; Timer IRQ
     mov edx, 0x28 ; Kernel code
 
@@ -370,14 +394,14 @@ Exceptions:
         xchg esp, ebp
 
         pop ecx
-        mov esp, ebp ; Using only hadler stack
+        mov esp, ebp ; Using only handler stack
 
         call Print.hex32
 
         mov bx, 0xFFFF
         call Print.refresh
 
-        jmp $
+        jmp $  ; TODO: Display interactive options
 
     .Exception:   dw (.Exception.2-.Exception-2)
                   db ",---EXCEPTION--------!!!"

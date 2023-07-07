@@ -1,4 +1,5 @@
 DescriptorSectorsSize equ 3
+DescriptorSize equ 0x1A
 FSSize equ 1024*2-1
 FileDescriptorSize equ 0x1A ; 26 ; 1+15+1+1+4+4
 BootFileSize equ 0x30

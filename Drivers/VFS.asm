@@ -55,6 +55,8 @@ VFS:
 
         call FlFS.getFileInfo
 
+        clc
+
         pop eax
         pop ecx
         pop esi ; pop edx
@@ -80,20 +82,16 @@ VFS:
 
         jmp .error2.postpop
 
-    .readFileForNewProcess: ; ebx - UserID, ecx - new PID, esi - file name string (zero-terminated), edi - buffer, ds - file name string segment, fs - buffer segment.
+    .readFileForNewProcess: ; ebx - UserID, ecx - new PID, ds:esi - file name string (zero-terminated), fs:edi - buffer.
         pusha
         mov eax, esi
         push ecx
         call .mountCheck
         mov edx, ecx
 
+        pop ecx
         cmp eax, esi
         je .error1
-
-
-        call ProcessManager.getCurrentPID
-        call ProcessManager.setLDT
-        pop ecx
 
         call FlFS.getFileNumber
 
@@ -114,15 +112,21 @@ VFS:
 
         .readFileForNewProcess.skipCheck:
 
+        push ds
         mov bx, fs
         mov ds, bx
 
         call FlFS.readFile
 
+        call ProcessManager.getCurrentPID
+        call ProcessManager.setLDT
+
+        pop ds
+
         popa
         ret
 
-    .readFile: ; ebx - UserID, esi - file name string (zero-terminated), edi - buffer, ds - file name string segment, fs - buffer segment.
+    .readFile: ; ebx - UserID, ds:esi - file name string (zero-terminated), fs:edi - buffer.
         pusha
         mov eax, esi
         call .mountCheck
@@ -144,10 +148,13 @@ VFS:
 
         .readFile.skipCheck:
 
+        push ds
         mov bx, fs
         mov ds, bx
 
         call FlFS.readFile
+
+        pop ds
 
         popa
         ret

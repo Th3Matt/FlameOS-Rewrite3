@@ -407,7 +407,7 @@ Print:
         dec cl
         shl cl, 2
 
-        mov ds, fs:[SOB.buffer+ecx+2]
+        mov ds, fs:[SOB.buffer+ecx+SOB.bufferEntry.segment]
         ;mov cx, fs:[SOB.buffer+ecx]
 
         mov ax, 0x38
@@ -629,42 +629,51 @@ Print:
         pop es
         ret
 
-    .switchToGraphics: ; cl - PID, si - graphics segment
-        push ds
+    .addFramebuffer: ; ecx - PID, si - new framebuffer segment
         push eax
+        push es
 
         mov ax, 0x10
-        mov ds, ax
+        mov es, ax
 
         xor eax, eax
-        mov al, ds:[SOB.currentlySelectedEntry]
+        mov al, byte es:[SOB.currentlySelectedEntry]
+        inc byte es:[SOB.currentlySelectedEntry]
         shl al, 2
-        inc byte ds:[SOB.currentlySelectedEntry]
-        mov byte ds:[SOB.buffer+eax], cl
-        mov byte ds:[SOB.buffer+eax+1], 00000000b
-        mov ds:[SOB.buffer+eax+2], si
+        mov word es:[SOB.buffer+eax+SOB.bufferEntry.flags], 1b   ; setting flags
+        mov es:[SOB.buffer+eax+SOB.bufferEntry.PID], ecx         ; setting PID
+        mov es:[SOB.buffer+eax+SOB.bufferEntry.segment], si      ; setting segment
 
+        pop es
         pop eax
-        pop ds
+
         ret
 
-    .switchBack:
-        push ds
+    .delFramebuffer: ; ecx - PID
         push eax
+        push es
 
         mov ax, 0x10
-        mov ds, ax
+        mov es, ax
 
         xor eax, eax
-        mov al, ds:[SOB.currentlySelectedEntry]
+        dec byte es:[SOB.currentlySelectedEntry]
+        mov al, byte es:[SOB.currentlySelectedEntry]
         shl al, 2
-        dec byte ds:[SOB.currentlySelectedEntry]
-        mov byte ds:[SOB.buffer+eax], 00000000b
-        mov byte ds:[SOB.buffer+eax+1], 00000000b
-        mov word ds:[SOB.buffer+eax+2], 0
 
+        cmp dword es:[SOB.buffer+eax+SOB.bufferEntry.PID], ecx ; checking if the framebuffer was created for this process
+        stc
+        jne .delFramebuffer.end
+
+        mov word es:[SOB.buffer+eax+SOB.bufferEntry.flags], 0   ; clearing flags
+        mov dword es:[SOB.buffer+eax+SOB.bufferEntry.PID], 0    ; clearing PID
+        mov word es:[SOB.buffer+eax+SOB.bufferEntry.segment], 0 ; clearing segment
+
+        pop es
         pop eax
-        pop ds
+
+        clc
+        .delFramebuffer.end:
         ret
 
 Draw:

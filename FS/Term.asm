@@ -175,9 +175,9 @@ Terminal:
         dec esi
 
         mov ebx, 0x21
-        int 0x30
+        int 0x30 ; attempt to run program
 
-        cmp eax, 0
+        cmp eax, 0 ; check if error occurred
         jz .enter.cleanup
 
         pop ds
@@ -192,7 +192,7 @@ Terminal:
         xor ebx, ebx
         xor ecx, ecx
 
-        int 0x30
+        int 0x30 ; print file not found
 
         mov ebx, 0x3
         int 0x30
@@ -207,7 +207,13 @@ Terminal:
             mov ecx, 0xffe
             xor eax, eax
 
+            push es
+            push fs
+            pop es
+
             rep stosb
+
+            pop es
 
         pop ds
 

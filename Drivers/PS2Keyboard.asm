@@ -185,12 +185,16 @@ PS_2_Keyboard:
 
     .storeKey:
         pusha
-        push ds
-
-        mov ax, 0x20
-        mov ds, ax
 
         in al, PS2_DATA_PORT
+
+        cmp al, 0x07
+        je .storeKey.triggerDebugMode
+
+        push ds
+
+        mov bx, 0x20
+        mov ds, bx
 
         xor ebx, ebx
         mov bl, ds:[KCB.writeCounter]
@@ -214,6 +218,13 @@ PS_2_Keyboard:
         pop ds
         popa
         ret
+
+        .storeKey.triggerDebugMode:
+            popa
+
+            call DebugMode.start
+
+            ret
 
     .getKey:
         push ebx

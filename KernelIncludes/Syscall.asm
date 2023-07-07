@@ -19,10 +19,11 @@ Syscall:
         mov dword es:[(0x4<<2)+4],  Print.decCursorPos
         mov dword es:[(0x5<<2)+4],  Draw.writeChar
         mov dword es:[(0x6<<2)+4],  Draw.writeStr
-        mov dword es:[(0x20<<2)+4], ProcessManager.yield
+        mov dword es:[(0x20<<2)+4], API.yield
         mov dword es:[(0x21<<2)+4], API.quickLoad
         mov dword es:[(0x22<<2)+4], API.processExit
         mov dword es:[(0x30<<2)+4], API.usermodeAllocate
+        mov dword es:[(0x31<<2)+4], API.loadFile
 
         pop es
         popa
