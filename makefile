@@ -32,7 +32,7 @@ Builds/OS.bin: Builds/FBL.bin Builds/BL.bin Builds/TBL.bin Builds/KRNL.bin Build
 	#dd if="Builds/KRNL.bin" of="Builds/OS.bin" bs=512 seek=7 conv=notrunc
 	#dd if="Builds/FS.bin" of="Builds/OS.bin" bs=512 seek=50 conv=notrunc
 	if test -f "Builds/OS.bin"; then rm "Builds/OS.bin"; fi
-	cat Builds/FBL.bin Builds/BL.bin Builds/TBL.bin Builds/KRNL.bin Builds/FS.bin >> Builds/OS.bin
+	cat Builds/FBL.bin Builds/BL.bin Builds/TBL.bin Builds/KRNL.bin Builds/FS.bin > Builds/OS.bin
 
 qemu: Builds/FlameOS.img
 	qemu-system-x86_64 -vga std -drive file=Builds/FlameOS.img,format=raw

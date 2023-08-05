@@ -516,9 +516,7 @@ Print:
 
             push eax
             mov eax, [fs:ScreenWidth]
-            shl eax, 3
-            mov ecx, 4
-            mul ecx
+            shl eax, 2+3
 
             sub edi, eax
             pop eax

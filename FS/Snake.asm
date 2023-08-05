@@ -12,6 +12,17 @@ Snake:
 	push cs
 	pop ds
 
+	push es
+	mov bx, gs
+	mov es, bx
+
+	mov ecx, 800*600
+	xor eax, eax
+	not eax
+	rep stosd
+
+	pop es
+
 	mov ebx, 0x31
 	mov esi, File
 
