@@ -439,122 +439,144 @@ Print:
         xor esi, esi
         xor edi, edi
 
-        push word 0x32
-        push word 0x50
+        xor edx, edx
+        mov eax, fs:[ScreenHeight]
+        mov ecx, 12
+        div ecx
 
-        .refresh.loop:
-            xor eax, eax
-            lodsb ; read char
+        push eax
 
-            mov edx, 25
-            mul edx
+        .refresh.textMode.newLine:
+            xor edx, edx
+            mov eax, fs:[ScreenWidth]
+            mov ecx, 10
+            div ecx
+
             push eax
 
-            lodsd ; read fg color
-            mov ebx, eax
-            lodsd ; read bg color
-            mov edx, eax
+            .refresh.textMode.newLine.newChar:
+                xor eax, eax
+                lodsb ; read char
 
-            pop eax
+                mov edx, 25
+                mul edx
 
-            .refresh.print:
+                push eax
+
+                lodsd ; read fg color
+                mov ebx, eax
+                lodsd ; read bg color
+                mov edx, eax
+
+                pop eax
+
+                ; drawing pixels to seperate lines
+
+                mov ecx, 10
+
+                .refresh.textMode.newLine.newChar.sLine.1:
+                    mov [gs:ecx*4+edi], edx
+                    loop .refresh.textMode.newLine.newChar.sLine.1
+
+                mov [gs:ecx*4+edi], edx
+
+                push eax
+                mov eax, [fs:ScreenWidth]
+                shl eax, 2
+                add edi, eax ; go to next line
+                pop eax
                 mov ecx, 5
-                push cx
-                push cx
+                push ecx
 
-                ;push edi
+                .refresh.textMode.newLine.newChar.0:
 
-                .refresh.print.0:
-                    xor ecx, ecx
-                    mov cl, [es:eax+Font.FontLength+4]
+                xor ebp, ebp
+                mov bp, [es:eax+Font.FontLength+4]
+                and bp, 0x00ff
 
-                    .refresh.print.0.1:
+                .refresh.textMode.newLine.newChar.0.1:
 
-                    test cl, 1
-                    jz .refresh.print.1.1
+                test bp, 1
+                jz .refresh.textMode.newLine.newChar.1.1
 
-                        mov [gs:edi], ebx
-                        jmp .refresh.print.1
+                mov [gs:edi], ebx
+                jmp .refresh.textMode.newLine.newChar.1
 
-                    .refresh.print.1.1:
-                        mov [gs:edi], edx
+                .refresh.textMode.newLine.newChar.1.1:
+                    mov [gs:edi], edx
 
-                    .refresh.print.1:
+                .refresh.textMode.newLine.newChar.1:
 
-                    test cl, 2
-                    jz .refresh.print.2.1
+                test bp, 2
+                jz .refresh.textMode.newLine.newChar.2.1
 
-                        mov [gs:edi+4], ebx
-                        jmp .refresh.print.2
+                mov [gs:edi+4], ebx
+                jmp .refresh.textMode.newLine.newChar.2
 
-                    .refresh.print.2.1:
-                        mov [gs:edi+4], edx
+                .refresh.textMode.newLine.newChar.2.1:
+                    mov [gs:edi+4], edx
 
-                    .refresh.print.2:
+                .refresh.textMode.newLine.newChar.2:
 
-                    test ch, 1
-                    jz .refresh.lowerHalf
+                test bp, 100h
+                jz .refresh.textMode.newLine.newChar.lowerHalf
 
-                and ch, 0xFE
-                pop edi
-                add edi, 8
+                inc eax ; next block
 
-                inc eax
-                pop cx
-                dec cl
-                push cx
+                push eax
+                mov eax, [fs:ScreenWidth]
+                shl eax, 2
+                sub edi, eax ; back one line
+                pop eax
 
-                jnz .refresh.print.0
+                add edi, 2*4 ; two pixels forward
 
-                pop cx
-                pop cx
-                dec cl
-                push cx
-                push word 5
+                dec ecx
+                jnz .refresh.textMode.newLine.newChar.0
 
-                jnz .refresh.nextLine
+                jmp .refresh.textMode.newLine.newChar.nextLine
 
-            push eax
-            mov eax, [fs:ScreenWidth]
-            shl eax, 2+3
+                ; drawing pixels to seperate lines
 
-            sub edi, eax
-            pop eax
+                .refresh.textMode.newLine.newChar.sLine.2.prep:
 
-            pop cx
-            pop cx
-            pop cx
-            dec cx
-            push cx
-            jnz .refresh.loop
+                mov ecx, 10
 
-            pop cx
-            pop cx
-            dec cx
+                .refresh.textMode.newLine.newChar.sLine.2:
+                    mov [gs:ecx*4+edi], edx
+                    loop .refresh.textMode.newLine.newChar.sLine.2
 
-            push eax
-            mov eax, [fs:ScreenWidth]
-            mov edi, 6
-            mul edi
-            shl eax, 3
+                mov [gs:ecx*4+edi], edx
+                add edi, 2*5*4 ; ten pixels forward
 
-            mov edi, ecx
-            sub edi, 0x32
-            not edi
-            inc edi
+                pop ecx
+                dec ecx
+                jz .refresh.textMode.newLine.prep
 
-            mul edi
+                push ecx
 
-            mov edi, eax
+                push eax
+                mov eax, [fs:ScreenWidth]
+                shl eax, 2
+                push edx
+                mov ecx, 11
+                mul ecx
+                pop edx
+                sub edi, eax ; twelve lines back
+                pop eax
 
-            pop eax
+                jmp .refresh.textMode.newLine.newChar
 
-            cmp cx, 0
-            push cx
-            push word 0x50
-            jnz .refresh.loop
+            .refresh.textMode.newLine.prep:
 
-        pop ecx
+            pop ecx
+            dec ecx
+            jz .refresh.textMode.end
+
+            push ecx
+            jmp .refresh.textMode.newLine
+
+        .refresh.textMode.end:
 
         pop gs
 
@@ -566,30 +588,35 @@ Print:
         popa
         ret
 
-            .refresh.nextLine:
+            .refresh.textMode.newLine.newChar.nextLine:
                 push eax
                 mov eax, [fs:ScreenWidth]
                 shl eax, 3
-                sub eax, 4*5*2
-
-                add edi, eax
+                add edi, eax ; two lines forwards
                 pop eax
 
-                jmp .refresh.print.0
+                sub edi, 2*5*4 ; ten pixels (one char width) back
 
-            .refresh.lowerHalf:
-                shr ecx, 2
-                or ch, 1
+                pop ecx
+                dec ecx
+                jz .refresh.textMode.newLine.newChar.sLine.2.prep ; if done drawing char
 
-                push edi
+                push ecx
+                mov ecx, 5
+
+                jmp .refresh.textMode.newLine.newChar.0
+
+            .refresh.textMode.newLine.newChar.lowerHalf:
+                shr ebp, 2
+                or bp, 100h ; set flag for second part of block
 
                 push eax
                 mov eax, [fs:ScreenWidth]
                 shl eax, 2
-                add edi, eax
+                add edi, eax ; go to next line
                 pop eax
 
-                jmp .refresh.print.0.1
+                jmp .refresh.textMode.newLine.newChar.0.1
 
     .charSyscall: ;eax - foreground color dword, ecx - background color dword, esi - Character #
         push ebx
