@@ -1,3 +1,5 @@
+Clock.clockTicks equ Clock
+
 API:
     .quickLoad: ; ds:esi - path to executable.
         push edx
@@ -47,6 +49,7 @@ API:
         cli
         xor ebx, ebx
         mov ds, bx
+        mov es, bx
         call ProcessManager.stopProcess
 
         call Print.delFramebuffer
@@ -161,4 +164,14 @@ API:
         sti
         hlt
         cli
+        ret
+
+    .readClock: ; Output: eax - clock ticks
+        push ds
+        mov ax, 0x10
+        mov ds, ax
+
+        mov eax, ds:[Clock.clockTicks]
+
+        pop ds
         ret

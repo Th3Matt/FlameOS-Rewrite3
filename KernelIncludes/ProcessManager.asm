@@ -528,6 +528,9 @@ ProcessManager:
 
          rep movsb
 
+        xor eax, eax
+        mov ds, ax
+
         mov ax, 0x40
 		mov es, ax
 

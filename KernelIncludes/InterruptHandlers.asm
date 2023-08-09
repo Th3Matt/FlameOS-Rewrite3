@@ -2,6 +2,14 @@ IRQHandlers:
     .timerInterrupt:
         push eax
 
+        push ds
+        mov ax, 0x10
+        mov ds, ax
+
+        inc dword ds:[Clock.clockTicks]
+
+        pop ds
+
         call Print.refresh
 
         mov al, 0x20
@@ -13,6 +21,14 @@ IRQHandlers:
     .timerInterruptForcedTextMode:
         push eax
 
+        push ds
+        mov ax, 0x10
+        mov ds, ax
+
+        inc dword ds:[Clock.clockTicks]
+
+        pop ds
+
         mov bx, 0xFFFF
         call Print.refresh
 
@@ -23,6 +39,13 @@ IRQHandlers:
         iret
 
     .timerInterrupt2:
+        push es
+        mov ax, 0x10
+        mov es, ax
+
+        inc dword es:[Clock.clockTicks]
+
+        pop es
 
         test dword [es:PMDB.flags], 00000010b
         jz .timerInterrupt2.notDebug
@@ -125,6 +148,14 @@ SetUpInterrupts:
 
     call IDT.modEntry
 
+    push ds
+    mov ax, 0x10
+    mov ds, ax
+
+    mov dword ds:[Clock.clockTicks], 0
+
+    pop ds
+
     mov eax, IRQHandlers.timerInterrupt
     mov  bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0x20 ; Timer IRQ
@@ -163,7 +194,7 @@ SetUpTimer:
     mov es:[0x4C], word 0x28
     mov es:[0x48], word 0x40
     mov es:[0x00], word 0x58
-    mov es:[0x60], word 0x68
+    mov es:[0x60], word 0x98
 
     push ds
     mov ax, 0x20

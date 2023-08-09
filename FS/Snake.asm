@@ -75,4 +75,4 @@ Str2: db .end-Str2-1, "Press q to quit"
 File: db "/Terminal.ub", 0
 
 
-times 512*3-($-$$) db 0
+times 512*3-($-Snake) db 0

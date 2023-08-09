@@ -3,7 +3,6 @@ DescriptorSize equ 0x1A
 FSSize equ 1024*2-1
 FileDescriptorSize equ 0x1A ; 26 ; 1+15+1+1+4+4
 BootFileSize equ 0x30
-TerminalFileSize equ 1+3
 
 InfoSector:
 	dd 41045015h			         ; Correct FlFS 0.2 signature
@@ -37,9 +36,11 @@ DescriptorSectors:
 		db 0
 
 		db 00000001b
+		TerminalFileSize equ 1+3
 		dd TerminalFileSize
 
-		dd BootFileSize+1+1+DescriptorSectorsSize
+		TerminalFileSector equ BootFileSize+1+1+DescriptorSectorsSize
+		dd TerminalFileSector
 
 	Snake.ub:
 		db 00000101b
@@ -50,8 +51,25 @@ DescriptorSectors:
 		db 0
 
 		db 00000001b
-		dd 1+3
+		SnakeFileSize equ 1+3
+		dd SnakeFileSize
 
-		dd BootFileSize+1+1+DescriptorSectorsSize+TerminalFileSize
+		SnakeFileSector equ TerminalFileSector+TerminalFileSize
+		dd SnakeFileSector
+
+	Clock.ub:
+		db 00000101b
+
+		db 'Clock.ub'
+		times 15-($-Clock.ub-1) db 0
+
+		db 0
+
+		db 00000001b
+		ClockFileSize equ 1+2
+		dd ClockFileSize
+
+		ClockFileSector equ SnakeFileSector+SnakeFileSize
+		dd ClockFileSector
 
 	times DescriptorSectorsSize*512-($-DescriptorSectors) db 0

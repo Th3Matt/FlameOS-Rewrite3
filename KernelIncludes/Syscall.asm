@@ -24,6 +24,7 @@ Syscall:
         mov dword es:[(0x22<<2)+4], API.processExit
         mov dword es:[(0x30<<2)+4], API.usermodeAllocate
         mov dword es:[(0x31<<2)+4], API.loadFile
+        mov dword es:[(0x40<<2)+4], API.readClock
 
         pop es
         popa

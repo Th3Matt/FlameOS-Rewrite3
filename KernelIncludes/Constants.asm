@@ -14,6 +14,8 @@ ThirdBootloaderSize equ 0x5 ; in sectors
         VESAMode                        equ 0x16  ; VESA mode for 800x600x32bpp
         VideoHardwareInterfaces         equ 0x18
 
+    Clock                               equ VariablesBase+0x40 ; 4 byte
+
     CustomSetting                       equ VariablesBase+0x80 ; First two bits control the detection of disks on ATA buses 0 and 1
 
     ; FlameFS partition info

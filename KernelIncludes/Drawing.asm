@@ -682,23 +682,24 @@ Print:
         mov es, ax
 
         xor eax, eax
-        dec byte es:[SOB.currentlySelectedEntry]
         mov al, byte es:[SOB.currentlySelectedEntry]
-        shl al, 2
+        dec eax
+        shl eax, 2
 
         cmp dword es:[SOB.buffer+eax+SOB.bufferEntry.PID], ecx ; checking if the framebuffer was created for this process
         stc
         jne .delFramebuffer.end
 
+        dec byte es:[SOB.currentlySelectedEntry]
         mov word es:[SOB.buffer+eax+SOB.bufferEntry.flags], 0   ; clearing flags
         mov dword es:[SOB.buffer+eax+SOB.bufferEntry.PID], 0    ; clearing PID
         mov word es:[SOB.buffer+eax+SOB.bufferEntry.segment], 0 ; clearing segment
 
+        clc
+        .delFramebuffer.end:
         pop es
         pop eax
 
-        clc
-        .delFramebuffer.end:
         ret
 
 Draw:
