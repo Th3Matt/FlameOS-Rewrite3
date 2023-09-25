@@ -44,8 +44,7 @@ EDDV3Read:
         mov ds, si
         mov eax, 0x00FFFFFF
         mov esi, .USBMessage+1
-        mov di, [.USBMessage]
-        and di, 0xff
+        movzx di, byte [.USBMessage]
         xor ecx, ecx
 
         call Print.string
@@ -57,8 +56,7 @@ EDDV3Read:
         mov ds, si
         mov eax, 0x00FFFFFF
         mov esi, .SCSIMessage+1
-        mov di, [.SCSIMessage]
-        and di, 0xff
+        movzx di, byte [.SCSIMessage]
         xor ecx, ecx
 
         call Print.string
@@ -71,8 +69,7 @@ EDDV3Read:
         mov ds, si
         mov eax, 0x00FFFFFF
         mov esi, .FireWireMessage+1
-        mov di, [.FireWireMessage]
-        and di, 0xff
+        movzx di, byte [.FireWireMessage]
         xor ecx, ecx
 
         call Print.string
@@ -84,8 +81,7 @@ EDDV3Read:
         mov ds, si
         mov eax, 0x00FFFFFF
         mov esi, .FibreMessage+1
-        mov di, [.FibreMessage]
-        and di, 0xff
+        movzx di, byte [.FibreMessage]
         xor ecx, ecx
 
         call Print.string
@@ -97,19 +93,12 @@ EDDV3Read:
         mov ds, si
         mov eax, 0x00FFFFFF
         mov esi, .ATAPIMessage+1
-        mov di, [.ATAPIMessage]
-        and di, 0xff
+        movzx di, byte [.ATAPIMessage]
         xor ecx, ecx
 
         call Print.string
 
         jmp $
-
-	.ATAPIMessage:    db .FibreMessage-.ATAPIMessage,    "Boot from ATAPI (CDROM) detected. It is currently unsupported. Halting."
-	.FibreMessage:    db .FireWireMessage-.FibreMessage, "Boot from Fibre channel detected. It is currently unsupported. Halting."
-	.FireWireMessage: db .SCSIMessage-.FireWireMessage,  "Boot from FireWire detected. It is currently unsupported. Halting."
-	.SCSIMessage:     db .USBMessage-.SCSIMessage,       "Boot from SCSI detected. It is currently unsupported. Halting."
-	.USBMessage:      db .end-.USBMessage,               "Boot from USB detected. It is currently unsupported. Halting."
 
 	.end:
 		clc
@@ -199,3 +188,15 @@ EDDV3Read:
 
 					mov word es:[EDD_DetectedDiskNumber], 3
 					jmp .end
+
+
+	section .rodata
+
+	.ATAPIMessage:    db .FibreMessage-.ATAPIMessage,    "Boot from ATAPI (CDROM) detected. It is currently unsupported. Halting."
+	.FibreMessage:    db .FireWireMessage-.FibreMessage, "Boot from Fibre channel detected. It is currently unsupported. Halting."
+	.FireWireMessage: db .SCSIMessage-.FireWireMessage,  "Boot from FireWire detected. It is currently unsupported. Halting."
+	.SCSIMessage:     db .USBMessage-.SCSIMessage,       "Boot from SCSI detected. It is currently unsupported. Halting."
+	.USBMessage:      db .endStr-.USBMessage,               "Boot from USB detected. It is currently unsupported. Halting."
+	.endStr:
+
+	section .text

@@ -5,6 +5,7 @@
 INFO:
 	.Entrypoint: 	dd Clock
 	.Flags:         dd 00000000000000000000000000000000b
+	.Check:         dd "FlOS"
 
 times 512-($-$$) db 0
 

@@ -131,11 +131,14 @@ Boot:
 			jmp $
 
 		.A20GateDone:
-	.diskLoad:
+diskLoad:
+		push word .load
+
     	.reset:
     	    xor ax, ax
         
         	int 0x13
+        	ret
         
     	.load:
     	    mov dl, ds:[SVO]
@@ -152,6 +155,11 @@ Boot:
 
 	        int 0x13
 
+	        jnc .read2
+	        call .counter
+	        jmp .load
+	        .read2:
+
 	        mov ah, 0x42
 			mov dword ds:[si], 0x002A0010
 			xor ecx, ecx
@@ -159,15 +167,18 @@ Boot:
 			mov word ds:[si+6], 0x2000
 			mov ds:[si+12], ecx
 			pop ecx
-			add ecx, 5
+			add ecx, 6
 			mov ds:[si+8], ecx
 
 	        int 0x13
 
     	    pop cx
 
-        	jc .counter
-        	
+        	jnc .readEnd
+        	call .counter
+        	jmp .load
+        	.readEnd:
+
 	        jmp .done
         
 	    .counter:

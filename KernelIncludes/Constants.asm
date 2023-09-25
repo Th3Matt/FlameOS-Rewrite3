@@ -1,7 +1,7 @@
 Vars   equ 0x2000
 GDTLoc equ 0x4000
 
-ThirdBootloaderSize equ 0x5 ; in sectors
+ThirdBootloaderSize equ 0x6 ; in sectors
 
 ;Variables
     VariablesBase                       equ 0x0

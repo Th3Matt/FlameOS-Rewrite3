@@ -1,6 +1,11 @@
 
 [ BITS 32 ]
 
+global KernelInit32
+section .text
+
+%include "KernelIncludes/Constants.asm"
+
 KernelInit32:
 	mov ax, 0x8
 	mov ss, ax
@@ -48,7 +53,7 @@ KERNEL:
 
 		pusha
 
-        mov al, (2<<6) + (11b<<4) + (2<<1) + 0
+        mov al, (0<<6) + (11b<<4) + (2<<1) + 0
         out 0x43, al
         mov al, 2Eh
         out 0x40, al
@@ -230,7 +235,7 @@ KERNEL:
 
         pop edx
 
-        call SetUpTimer
+        call SetUpSheduler
 
         call Print.saveCurrentCursorPos
         call Print.newLineSyscall
@@ -239,11 +244,6 @@ KERNEL:
 		sti
 		hlt
 		jmp $-1
-
-Strings:
-	.Terminal:
-		db 'Terminal.ub', 0
-
 
 TestException:
 	mov eax, 0xAAAAAAAA
@@ -274,10 +274,6 @@ NoBootFile:
 	call Print.string
 	hlt
 	jmp $-1
-
-	.msg: db .msg2-.msg-1, "Kernel: "
-	.msg2: db .end-.msg2-1, "Boot file is missing or filename is incorrect."
-	.end:
 
 PCITest:
 	call PCIDriver.printDeviceTable
@@ -374,15 +370,6 @@ Conv:
         pop eax
         ret
 
-    .HexConvTable: db "0123456789ABCDEF"
-
-StartupText:  db (.end-$-1), "Kernel: FlameOS Starting up...", 10
-			  db             "Kernel: Video driver initialised."
-	.end:
-
-IDTloaded:	  db (.end-$-1), "Kernel: IDT initialised."
-	.end:
-
 DebugMode:
 	.start:
 		push eax
@@ -437,6 +424,18 @@ DebugMode:
 
 		ret
 
+Power:
+	.ForceRestart:
+		mov ax, 0x02
+		mov ds, ax
+		lidt [ds:0]
+		ud1          ; Restart
+	.PS_2Restart:
+		call PS2.waitForWrite
+
+		mov  al, 0xFE
+		out  0x64, al
+
 %include "Drivers/VGA.asm"
 %include "Drivers/ATA.asm"
 %include "Drivers/PCI.asm"
@@ -447,14 +446,35 @@ DebugMode:
 
 %include "KernelIncludes/EDD.asm"
 %include "KernelIncludes/Drawing.asm"
-%include "KernelIncludes/Glyphs.asm"
 %include "KernelIncludes/InterruptHandlers.asm"
 %include "KernelIncludes/ProcessManager.asm"
 %include "KernelIncludes/MemoryManager.asm"
 %include "KernelIncludes/ProgramLoader.asm"
 %include "KernelIncludes/API.asm"
 %include "KernelIncludes/Syscall.asm"
-%include "KernelIncludes/Constants.asm"
 %include "KernelIncludes/DeviceListTools.asm"
 
-times 0x200*(0x30-ThirdBootloaderSize)-($-$$) db 0
+section .rodata
+
+
+StartupText:  db (.end-$-1), "Kernel: FlameOS Starting up...", 10
+			  db             "Kernel: Video driver initialised."
+	.end:
+
+IDTloaded:	  db (.end-$-1), "Kernel: IDT initialised."
+	.end:
+
+Conv.HexConvTable: db "0123456789ABCDEF"
+
+NoBootFile.msg: db NoBootFile.msg2-NoBootFile.msg-1, "Kernel: "
+NoBootFile.msg2: db NoBootFile.end-NoBootFile.msg2-1, "Boot file is missing or filename is incorrect."
+NoBootFile.end:
+
+
+Strings:
+	.Terminal:
+		db 'Terminal.ub', 0
+
+
+%include "KernelIncludes/Glyphs.asm"
+; times 0x200*(0x30-ThirdBootloaderSize)-($-$$) db 0

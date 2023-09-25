@@ -1107,6 +1107,8 @@ S_ATA_PI:
             popa
             ret
 
+    section .rodata
+
     .Driver_Message_Prefix: db .Fail__Message-.Driver_Message_Prefix-1, 10, "S_ATA_PI: "
     .Fail__Message: db .Error_Message-.Fail__Message-1, "This device has encountered too many errors and will be skipped."
     .Error_Message: db .noDiskMessage-.Error_Message-1, " has encountered an error."
@@ -1119,3 +1121,5 @@ S_ATA_PI:
     .noBus2Message: db .noBusOnMessage-.noBus2Message-1, "(ATA:1) has no drives attached."
     .noBusOnMessage: db .end-.noBusOnMessage-1, "Both ATA buses have no drives attached. Halting."
     .end:
+
+    section .text

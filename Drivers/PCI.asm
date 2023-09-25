@@ -322,6 +322,8 @@ PCIDriver:
             pop ecx
             ret
 
+    section .rodata
+
     .deviceTableTop: db .deviceTableEntry-.deviceTableTop-1
         db "|-----------------------------------------------------------------------------|", 10
         db "| ID         | V/D_ID     | C/SC       | BAR0       | BAR1       | BAR2       |", 10
@@ -333,3 +335,5 @@ PCIDriver:
     .deviceTableEnd: db .deviceTable.end-.deviceTableEnd-1
         db "|-----------------------------------------------------------------------------|", 10
     .deviceTable.end:
+
+    section .text

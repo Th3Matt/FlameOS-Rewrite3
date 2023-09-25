@@ -57,6 +57,21 @@ DescriptorSectors:
 		SnakeFileSector equ TerminalFileSector+TerminalFileSize
 		dd SnakeFileSector
 
+	SnakeData.dat:
+		db 00000101b
+
+		db 'SnakeData.dat'
+		times 15-($-SnakeData.dat-1) db 0
+
+		db 0
+
+		db 00000001b
+		SnakeDatFileSize equ 2
+		dd SnakeDatFileSize
+
+		SnakeDatFileSector equ SnakeFileSector+SnakeFileSize
+		dd SnakeDatFileSector
+
 	Clock.ub:
 		db 00000101b
 
@@ -69,7 +84,7 @@ DescriptorSectors:
 		ClockFileSize equ 1+2
 		dd ClockFileSize
 
-		ClockFileSector equ SnakeFileSector+SnakeFileSize
+		ClockFileSector equ SnakeDatFileSector+SnakeDatFileSize
 		dd ClockFileSector
 
 	times DescriptorSectorsSize*512-($-DescriptorSectors) db 0

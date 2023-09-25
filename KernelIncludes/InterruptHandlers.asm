@@ -88,7 +88,7 @@ IRQHandlers:
             jmp .timerInterrupt2 ; fix for a bug with tss
 
         .timerInterrupt2.stopPC:             ; No more tasks to execute, check whether to restart or shut down the computer
-            jmp $                           ; TODO: implement
+            call Power.PS_2Restart
 
 SetUpInterrupts:
     pusha
@@ -180,7 +180,7 @@ SetUpInterrupts:
     ret
 
 
-SetUpTimer:
+SetUpSheduler:
     pusha
     push es
 
@@ -434,6 +434,8 @@ Exceptions:
 
         jmp $  ; TODO: Display interactive options
 
+    section .rodata
+
     .Exception:   dw (.Exception.2-.Exception-2)
                   db ",---EXCEPTION--------!!!"
 
@@ -452,3 +454,5 @@ Exceptions:
     .Exception.6: dw (.Exception.end-.Exception.6-2)
                   db "EIP:  0x"
     .Exception.end:
+
+    section .text

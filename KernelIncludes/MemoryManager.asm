@@ -462,6 +462,8 @@ MemoryManager:
             pop ecx
             ret
 
+    section .rodata
+
     .memTableTop: db .memTableEntry-.memTableTop-1
         db "|--------------------------------------|", 10
         db "| PID        | StartAddr  | Size       |", 10
@@ -478,3 +480,4 @@ MemoryManager:
         db "OUT OF MEMORY, so that sucks, I guess."
     .end:
 
+    section .text
