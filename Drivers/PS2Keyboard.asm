@@ -1,168 +1,201 @@
 
-KCB.writeCounter                equ KeyboardCircularBufferSpace
-KCB.readCounter                 equ KCB.writeCounter+1
-KCB.buffer                      equ KCB.readCounter+1 ; 48 bytes
+PS2.Device1                equ PS2Devices
+PS2.Device2                equ PS2.Device1+4
+
+PS2_keyboardBufferSize equ 0x80-DeviceList.EntryDriverDataOffset-2
 
 PS_2_Keyboard:
     .init:
         pusha
 
         push ds
+        push es
 
-        mov ax, 0x20
+        mov ax, Segments.IDT
         mov ds, ax
 
-        mov byte ds:[KCB.writeCounter], 0
-        mov byte ds:[KCB.readCounter], 0
+        mov ax, Segments.Variables
+        mov es, ax
 
-        mov ax, 2
-        mov bx, 1
+        mov dword es:[PS2.Device1], 0
+        mov dword es:[PS2.Device2], 0
         xor ecx, ecx
 
-        call DeviceList.findDevice
-        mov ecx, eax
-        jc .init.end2
+        .init.loop:
+            mov ax, 2 ; Keyboard
+            mov bx, 1 ; PS/2
 
-        call DeviceList.getDeviceEntry
+            pusha
 
-        ror  ecx, 16
+            call DeviceList.findDevice
+            mov ecx, eax
+            jc .init.end
 
-        test cl,  1
-        jnz .init.Port2
+            mov esi, 1
+            xor eax, eax
+            call DeviceList.writeWordToDeviceEntry
 
-        .init.Port1:
+            xor esi, esi
+            call DeviceList.readDwordFromDeviceEntry
+            mov ecx, eax
 
-        call PS2.waitForWriteT
+            ror  ecx, 16
 
-        mov al, 0xF0
-        out PS2_DATA_PORT, al ; Set scancode set
+            test cl,  1
+            jnz .init.loop.Port2
 
-        .init.Port1.1:
+            .init.loop.Port1:
 
-        call PS2.waitForReadT
+            call PS2.waitForWriteT
 
-        in al, PS2_DATA_PORT
+            mov al, 0xF0
+            out PS2_DATA_PORT, al ; Set scancode set
 
-        cmp al, 0x0
-        je .init.Port1.1
+            .init.loop.Port1.1:
 
-        cmp al, 0xFE
-        je .init.Port1
+            call PS2.waitForReadT
 
-        cmp al, 0xFA
-        jne .init.end
+            in al, PS2_DATA_PORT
 
-        mov al, 0x03
-        out PS2_DATA_PORT, al
+            cmp al, 0x0
+            je .init.loop.Port1.1
 
-        .init.Port1.2:
+            cmp al, 0xFE
+            je .init.loop.Port1
 
-        call PS2.waitForWriteT
+            cmp al, 0xFA
+            jne .init.loop.Port2
 
-        mov al, 0xF4
-        out PS2_DATA_PORT, al ; Enable scanning
+            mov al, 0x03
+            out PS2_DATA_PORT, al
 
-        .init.Port1.3:
+            .init.loop.Port1.2:
 
-        call PS2.waitForReadT
+            call PS2.waitForWriteT
 
-        in al, PS2_DATA_PORT
+            mov al, 0xF4
+            out PS2_DATA_PORT, al ; Enable scanning
 
-        cmp al, 0x0
-        je .init.Port1.3
+            .init.loop.Port1.3:
 
-        cmp al, 0xFE
-        je .init.Port1.2
+            call PS2.waitForReadT
 
-        cmp al, 0xFA
-        jne .init.end
+            in al, PS2_DATA_PORT
 
-        mov eax, .PS_2_Interrupt
-        mov  bh, 10001110b ; DPL 0, Task Gate
-        mov ecx, 0x21 ; PS/2 IRQ 1
-        mov edx, 0x28 ; Kernel code
+            cmp al, 0x0
+            je .init.loop.Port1.3
 
-        call IDT.modEntry
+            cmp al, 0xFE
+            je .init.loop.Port1.2
 
-        in al, 0x21
-        and al, 11111101b
-        out 0x21, al
+            cmp al, 0xFA
+            jne .init.loop.Port2
 
-        jmp .init.end
+            mov eax, .PS_2_Interrupt
+            mov  bh, 10001110b ; DPL 0, Task Gate
+            mov ecx, 0x21 ; PS/2 IRQ 1
+            mov edx, 0x28 ; Kernel code
 
-        .init.Port2:
+            call IDT.modEntry
 
-        call PS2.waitForWriteT
+            in al, 0x21
+            and al, 11111101b
+            out 0x21, al
 
-        mov al, 0xF0
-        call PS2.commandToSecondPort ; Set scancode set
+            popa
 
-        .init.Port2.1:
+            call DeviceList.findDevice
+            mov es:[PS2.Device1], eax
 
-        call PS2.waitForReadT
+            pusha
 
-        in al, PS2_DATA_PORT
+            jmp .init.loop.end
 
-        cmp al, 0x0
-        je .init.Port2.1
+            .init.loop.Port2:
 
-        cmp al, 0xFE
-        je .init.Port2
+            call PS2.waitForWriteT
 
-        cmp al, 0xFA
-        jne .init.end
+            mov al, 0xF0
+            call PS2.commandToSecondPort ; Set scancode set
 
-        mov al, 0x03
-        call PS2.commandToSecondPort
+            .init.loop.Port2.1:
 
-        .init.Port2.2:
+            call PS2.waitForReadT
 
-        call PS2.waitForWriteT
+            in al, PS2_DATA_PORT
 
-        mov al, 0xF4
-        call PS2.commandToSecondPort ; Enable scanning
+            cmp al, 0x0
+            je .init.loop.Port2.1
 
-        .init.Port2.3:
+            cmp al, 0xFE
+            je .init.loop.Port2
 
-        call PS2.waitForReadT
+            cmp al, 0xFA
+            jne .init.loop.end
 
-        in al, PS2_DATA_PORT
+            mov al, 0x03
+            call PS2.commandToSecondPort
 
-        cmp al, 0x0
-        je .init.Port2.3
+            .init.loop.Port2.2:
 
-        cmp al, 0xFE
-        je .init.Port2.2
+            call PS2.waitForWriteT
 
-        cmp al, 0xFA
-        jne .init.end
+            mov al, 0xF4
+            call PS2.commandToSecondPort ; Enable scanning
 
-        mov eax, .PS_2_Interrupt2
-        mov  bh, 10001110b ; DPL 0, Task Gate
-        mov ecx, 0x2C ; PS/2 IRQ 2
-        mov edx, 0x28 ; Kernel code
+            .init.loop.Port2.3:
 
-        call IDT.modEntry
+            call PS2.waitForReadT
 
-        in al, 0xA1
-        and al, 11101111b
-        out 0xA1, al
+            in al, PS2_DATA_PORT
+
+            cmp al, 0x0
+            je .init.loop.Port2.3
+
+            cmp al, 0xFE
+            je .init.loop.Port2.2
+
+            cmp al, 0xFA
+            jne .init.loop.end
+
+            mov eax, .PS_2_Interrupt2
+            mov  bh, 10001110b ; DPL 0, Task Gate
+            mov ecx, 0x2C ; PS/2 IRQ 2
+            mov edx, 0x28 ; Kernel code
+
+            call IDT.modEntry
+
+            in al, 0xA1
+            and al, 11101111b
+            out 0xA1, al
+
+            popa
+
+            call DeviceList.findDevice
+            mov es:[PS2.Device2], eax
+
+            pusha
+
+        .init.loop.end:
+            popa
+
+            inc ecx
+
+            jmp .init.loop
 
         .init.end:
+        popa
 
-        mov ebx, .getKey
-        mov ecx, 0x10
-        call Syscall.add
-
-        .init.end2:
-
+        pop es
         pop ds
+
         popa
         ret
 
     .PS_2_Interrupt:
         push eax
 
+        xor eax, eax
         call .storeKey
 
         mov al, 0x20
@@ -174,6 +207,7 @@ PS_2_Keyboard:
     .PS_2_Interrupt2:
         push eax
 
+        mov eax, 1
         call .storeKey
 
         mov al, 0x20
@@ -186,34 +220,58 @@ PS_2_Keyboard:
     .storeKey:
         pusha
 
-        in al, PS2_DATA_PORT
+        push eax
 
-        cmp al, 0x07
+        in al, PS2_DATA_PORT
+        xor edx, edx
+        mov dl, al
+
+        pop eax
+
+        cmp dl, 0x07
         je .storeKey.triggerDebugMode
 
         push ds
 
-        mov bx, 0x20
+        mov bx, Segments.Variables
         mov ds, bx
 
-        xor ebx, ebx
-        mov bl, ds:[KCB.writeCounter]
+        mov ecx, PS2.Device1
 
-        mov ds:[KCB.buffer+ebx], al
+        cmp eax, 0
+        jz .storeKey.device1
 
-        cmp ebx, 0x30
+        add ecx, 4
+
+        .storeKey.device1:
+
+        mov ecx, ds:[ecx]
+
+        mov esi, 1
+
+        call DeviceList.readByteFromDeviceEntry
+
+        push eax
+        add eax, 3
+        mov esi, eax
+        mov eax, edx
+
+        call DeviceList.writeByteToDeviceEntry
+
+        pop ebx ; pop eax
+
+        inc ebx
+        cmp ebx, PS2_keyboardBufferSize ; check for overflow
         jl .storeKey.1
 
         mov ebx, 0x0
-        jmp .storeKey.2
 
         .storeKey.1:
 
-        inc ebx
+        mov esi, 1
+        mov eax, ebx
 
-        .storeKey.2:
-
-        mov ds:[KCB.writeCounter], bl
+        call DeviceList.writeByteToDeviceEntry
 
         pop ds
         popa
@@ -225,38 +283,3 @@ PS_2_Keyboard:
             call DebugMode.start
 
             ret
-
-    .getKey:
-        push ebx
-        push ds
-
-        mov ax, 0x20
-        mov ds, ax
-
-        xor ebx, ebx
-        mov bl, ds:[KCB.readCounter]
-        xor eax, eax
-        cmp bl, ds:[KCB.writeCounter]
-        je .getKey.end
-
-        mov al, ds:[KCB.buffer+ebx]
-
-        cmp ebx, 0x30
-        jl .getKey.1
-
-        mov ebx, 0x0
-        jmp .getKey.2
-
-        .getKey.1:
-
-        inc ebx
-
-        .getKey.2:
-
-        mov ds:[KCB.readCounter], bl
-
-        .getKey.end:
-
-        pop ds
-        pop ebx
-        ret

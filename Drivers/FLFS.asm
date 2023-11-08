@@ -6,20 +6,19 @@ FlFS:
         pusha
         push fs
         push ds
+        push es
         push edx
 
-        mov ax, 0x88
+        mov ax, Segments.FS_Header
         mov fs, ax
 
-        push es
-        mov ax, 0x10
+        mov ax, Segments.Variables
         mov es, ax
 
         mov eax, BootFileSize+1
         add eax, [es:FlPartitionInfo.firstSector]
         xor ebx, ebx
         mov bx, es:[EDD_DetectedDiskNumber]
-        pop es
         push ebx
 
         mov ecx, 5
@@ -38,40 +37,20 @@ FlFS:
 
         shr ecx, 3
         inc ecx
-        xor eax, eax
 
-        call MemoryManager.memAlloc
-
-        shl ecx, 9
-        dec ecx
-
-        push ecx
-        mov cx, 0x70
-        mov ds, cx
-
-        push edx
         xor edx, edx
-        xor ecx, ecx
-        mov ebx, eax
-        add ebx, 0xfff
+        call API.alloc
 
-        call MemoryManager.createLDTEntry
         pop ecx
+
         mov fs:[10], si
-
-        pop edx
-        pop ecx
-
         mov fs, si
 
-        push es
-        mov ax, 0x10
+        mov ax, Segments.Variables
         mov es, ax
 
         mov eax, BootFileSize+2
         add eax, [es:FlPartitionInfo.firstSector]
-
-        pop es
 
         pop ebx
         push ebx
@@ -81,10 +60,13 @@ FlFS:
 
         mov si, fs
         mov ds, si
-        mov si, 0x28
+        mov si, Segments.KernelCode
         mov es, si
         mov esi, 1
         xor ecx, ecx
+
+        ;cli
+        ;jmp $
 
         .init.fileNameLoop:
             lodsb
@@ -100,18 +82,16 @@ FlFS:
 
         .init.fileNameLoop.done:
 
-        mov bx, 0x88
+        mov bx, Segments.FS_Header
         mov fs, bx
 
         pop ebx
         mov fs:[0], ebx ; saving disk number over signature
 
-        mov si, 0x28
+        mov si, Segments.KernelCode
         mov ds, si
         mov eax, 0x00FFFFFF
-        mov esi, .FoundBootDiskMsg+1
-        mov di, [.FoundBootDiskMsg]
-        and di, 0xff
+        mov esi, .FoundBootDiskMsg
         pop edx
 
         push ecx
@@ -121,6 +101,7 @@ FlFS:
 
         pop ecx
 
+        pop es
         pop ds
         pop fs
         popa
@@ -128,9 +109,7 @@ FlFS:
 
         .init.error:
             mov eax, 0x00FF0000
-            mov esi, .DiskNotFoundMsg+1
-            mov di, [.DiskNotFoundMsg]
-            and di, 0xff
+            mov esi, .DiskNotFoundMsg
             xor ecx, ecx
 
             call Print.string
@@ -140,9 +119,7 @@ FlFS:
 
         .init.error.sig:
             mov eax, 0x00FF0000
-            mov esi, .FSSignatureWrongMsg+1
-            mov di, [.FSSignatureWrongMsg]
-            and di, 0xff
+            mov esi, .FSSignatureWrongMsg
             xor ecx, ecx
 
             call Print.string
@@ -151,12 +128,10 @@ FlFS:
             jmp $-1
 
         .init.error.kernelFile:
-            mov si, 0x28
+            mov si, Segments.KernelCode
             mov ds, si
             mov eax, 0x00FF0000
-            mov esi, .KernelFileMissingMsg+1
-            mov di, [.KernelFileMissingMsg]
-            and di, 0xff
+            mov esi, .KernelFileMissingMsg
             xor ecx, ecx
 
             call Print.string
@@ -172,16 +147,13 @@ FlFS:
         mov ecx, FileDescriptorSize
         mul ecx
 
-        mov bx, 0x88
+        mov bx, Segments.FS_Header
         mov fs, bx
 
-        mov bx, 0x10
+        mov bx, Segments.Variables
         mov es, bx
 
-        sldt bx      ; storing the process ldt
-        push bx
-        mov bx, 0x98
-        lldt bx
+        SWITCH_TO_SYSTEM_LDT bx
 
         mov ebx, fs:[0]
 
@@ -198,8 +170,7 @@ FlFS:
         mov eax, edx
         add eax, [es:FlPartitionInfo.firstSector]
 
-        pop dx
-        lldt dx     ; restoring process ldt
+        SWITCH_BACK_TO_PROCESS_LDT dx
 
         mov dx, ds
         mov fs, dx
@@ -223,13 +194,10 @@ FlFS:
     .getFileInfo: ; eax - file number. Output: ebx - file size, cl - UserID, dl - file flags.
         push fs
         push eax
-        mov bx, 0x88
+        mov bx, Segments.FS_Header
         mov fs, bx
 
-        sldt bx
-        push bx
-        mov bx, 0x98
-        lldt bx
+        SWITCH_TO_SYSTEM_LDT bx
 
         mov bx, fs:[10]
         mov fs, bx
@@ -243,8 +211,7 @@ FlFS:
         xor edx, edx
         mov dl,  fs:[eax]
 
-        pop dx
-        lldt dx     ; restoring process ldt
+        SWITCH_BACK_TO_PROCESS_LDT dx
 
         pop eax
         pop fs
@@ -258,20 +225,16 @@ FlFS:
         push edi
         push fs
 
-        sldt bx
-        push bx
-        mov bx, 0x98
-        lldt bx
+        SWITCH_TO_SYSTEM_LDT bx
 
-        mov ax, 0x88
+        mov ax, Segments.FS_Header
         mov fs, ax
         mov ax, fs:[10]
         mov fs, ax
 
         mov edi, 1
 
-        xor ebx, ebx
-        mov bl, fs:[5]
+        movzx ebx, byte fs:[5]
         inc ebx
         shl ebx, 4+4+3
 
@@ -331,8 +294,7 @@ FlFS:
             clc
 
         .getFileNumber.end:
-            pop dx
-            lldt dx     ; restoring process ldt
+            SWITCH_BACK_TO_PROCESS_LDT dx
 
             pop fs
             pop edi
@@ -344,10 +306,10 @@ FlFS:
 
     section .rodata
 
-    .FoundBootDiskMsg:     db .FSSignatureWrongMsg-.FoundBootDiskMsg-1,     'FlFS: Boot disk found.'
-    .FSSignatureWrongMsg:  db .KernelFileMissingMsg-.FSSignatureWrongMsg-1, 'FlFS: FLFS signature not found.'
-    .KernelFileMissingMsg: db .DiskNotFoundMsg-.KernelFileMissingMsg-1,     "FlFS: Kernel file '32Boot.sb' not found."
-    .DiskNotFoundMsg:      db .end-.DiskNotFoundMsg-1,                      'FlFS: Boot disk not found.'
+    .FoundBootDiskMsg:     db .FSSignatureWrongMsg-.FoundBootDiskMsg-1,     'FlFS: Boot disk found.', 10
+    .FSSignatureWrongMsg:  db .KernelFileMissingMsg-.FSSignatureWrongMsg-1, 'FlFS: FLFS signature not found.', 10
+    .KernelFileMissingMsg: db .DiskNotFoundMsg-.KernelFileMissingMsg-1,     "FlFS: Kernel file '48Boot.sb' not found.", 10
+    .DiskNotFoundMsg:      db .end-.DiskNotFoundMsg-1,                      'FlFS: Boot disk not found.', 10
     .end:
     .KernelFileName: db '48Boot.sb', 0
 

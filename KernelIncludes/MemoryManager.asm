@@ -6,7 +6,7 @@ MemoryManager:
         pusha
         push es
 
-        mov ax, 0x78
+        mov ax, Segments.MemAllocData
 		mov es, ax
 
 		xor edi, edi
@@ -16,7 +16,7 @@ MemoryManager:
 
 		rep stosd
 
-		mov ax, 0x70
+		mov ax, Segments.UserspaceMem
 		mov es, ax
 
 		xor edi, edi
@@ -25,90 +25,12 @@ MemoryManager:
 
 		rep stosd
 
+		mov ax, Segments.SysLDT
+        lldt ax
+
 		pop es
 		popa
 		ret
-
-    .createLDTEntry: ; eax - base, ebx - limit, ecx - Process ID, edx - cpu ring, ds - writable segment containing LDT. Output: esi - LDT entry.
-        push eax
-        push ebx
-        push ecx
-        push edx
-
-        and dx, 11b
-        shl dx, 5
-        push edx
-
-        shl ecx, 3+8
-        mov esi, ecx
-        sub esi, 8
-
-        .createLDTEntry.loop: ; Finding free LDT entry
-            add esi, 8
-            test byte [ds:esi+5], 10000000b
-            jnz .createLDTEntry.loop
-
-        shr ebx, 12
-
-        mov [ds:esi], bx
-
-        add esi, 2
-        mov [ds:esi], ax
-
-        add esi, 2
-
-        xor ecx, ecx
-
-        ror eax, 16
-        mov ch, ah
-        shr ebx, 16
-        mov cl, bl
-        and cl, 0x0f
-        or cl, 11010000b
-        shl ecx, 16
-
-        pop edx
-        or ch, dl
-
-        or ch, 10010010b
-        mov cl, al
-        mov [ds:esi], ecx
-
-        and esi, 0xff
-
-        pop edx
-        pop ecx
-        pop ebx
-        pop eax
-        ret
-
-    .clearLDT: ; ecx - process ID, ds - writable segment containing LDT.
-        push esi
-
-        xor esi, esi
-
-        .clearLDT.loop:
-            call .deleteLDTEntry
-
-            add esi, 8
-            cmp esi, 0x200*8
-            jle .clearLDT.loop
-
-        pop esi
-        ret
-
-    .deleteLDTEntry: ; ecx - Process ID, esi - LDT entry, ds - writable segment containing LDT.
-        push ecx
-        push esi
-
-        shl ecx, 3+8
-        and esi, 111111111111111111111111111000b
-        add esi, ecx
-        and byte [ds:esi+5], 0
-
-        pop esi
-        pop ecx
-        ret
 
     .memAlloc:    ; eax - process ID, ecx - requested blocks of 4 KiB. Output: eax - address of allocated space
         push es
@@ -119,7 +41,7 @@ MemoryManager:
 
         push eax
 
-        mov ax, 0x78
+        mov ax, Segments.MemAllocData
 		mov es, ax
 
 		xor edi, edi
@@ -215,7 +137,7 @@ MemoryManager:
             jmp .memAlloc.writeAllocation.testIfWrite
 
         .memAlloc.outOfMemory:
-            mov ax, 0x38
+            mov ax, Segments.VRAM_Graphics
             mov es, ax
             xor edi, edi
 
@@ -226,12 +148,10 @@ MemoryManager:
             mov ecx, 0xff880000
             call Print.fillScreen
 
-            mov si, 0x28
+            mov si, Segments.KernelCode
             mov ds, si
             mov eax, 0x00FFFFFF
-            mov esi, .outOfMemoryErrorMsg+1
-            mov edi, [.outOfMemoryErrorMsg]
-            and edi, 0xff
+            mov esi, .outOfMemoryErrorMsg
 
             mov edx, (800/10)*(30/10)+(800/20)
             push edi
@@ -251,7 +171,7 @@ MemoryManager:
         push es
         push esi
 
-        mov cx, 0x78
+        mov cx, Segments.MemAllocData
         mov es, cx
 
         mov ecx, (0x1000-0x200)/16
@@ -283,7 +203,7 @@ MemoryManager:
 
         push eax
 
-        mov ax, 0x78
+        mov ax, Segments.MemAllocData
 		mov es, ax
 
         pop eax
@@ -360,22 +280,19 @@ MemoryManager:
 
         call Print.clearScreen
 
-        mov ax, 0x28
+        mov ax, Segments.KernelCode
         mov ds, ax
 
         xor eax, eax
         not eax
         xor edx, edx
-        mov esi, .memTableTop+1
-        mov edi, [ds:esi-1]
-        shl edi, 24
-        shr edi, 24
+        mov esi, .memTableTop
         xor ecx, ecx
 
         call Print.string
 
         push es
-        mov cx, 0x78
+        mov cx, Segments.MemAllocData
         mov es, cx
 
         mov ecx, 18
@@ -400,61 +317,50 @@ MemoryManager:
             mov edi, 4
             xor ecx, ecx
 
-            call Print.string
+            call Print.stringWithSize
 
             pop ebx
-            mov ecx, [es:ebx]
             push ebx
-            xor ebx, ebx
+            mov ebx, [es:ebx]
 
             call Print.hex32
 
             mov edi, 5
             add esi, 4
-            xor ecx, ecx
 
-            call Print.string
+            call Print.stringWithSize
 
             pop ebx
-            mov ecx, [es:ebx+12]
             push ebx
-            xor ebx, ebx
+            mov ebx, [es:ebx+12]
 
             call Print.hex32
 
             mov edi, 5
             add esi, 5
-            xor ecx, ecx
 
-            call Print.string
+            call Print.stringWithSize
 
             pop ebx
+            push ebx
 
-            mov ecx, [es:ebx+8]
+            mov ebx, [es:ebx+8]
             push eax
             push edx
             mov eax, 0x1000
-            mul ecx
-            mov ecx, eax
+            mul ebx
+            mov ebx, eax
             pop edx
             pop eax
-
-            push ebx
-            xor ebx, ebx
 
             call Print.hex32
 
             mov edi, 3
             add esi, 5
-            xor ecx, ecx
 
-            call Print.string
+            call Print.stringWithSize
 
-            mov esi, .memTableEnd+1
-            mov edi, [ds:esi-1]
-            shl edi, 24
-            shr edi, 24
-            xor ecx, ecx
+            mov esi, .memTableEnd
 
             call Print.string
 
@@ -481,3 +387,128 @@ MemoryManager:
     .end:
 
     section .text
+
+
+LDT:
+    .createEntry: ; eax - base, ebx - limit, ecx - Process ID, edx - cpu ring, ds - writable segment containing LDT. Output: esi - LDT entry.
+        push eax
+        push ebx
+        push ecx
+        push edx
+
+        and dx, 11b
+        shl dx, 5
+        push edx
+
+        shl ecx, 3+8
+        mov esi, ecx
+        sub esi, 8
+
+        .createEntry.loop: ; Finding free LDT entry
+            add esi, 8
+            test byte [ds:esi+5], 10000000b
+            jnz .createEntry.loop
+
+        shr ebx, 12
+
+        mov [ds:esi], bx
+
+        add esi, 2
+        mov [ds:esi], ax
+
+        add esi, 2
+
+        xor ecx, ecx
+
+        ror eax, 16
+        mov ch, ah
+        shr ebx, 16
+        mov cl, bl
+        and cl, 0x0f
+        or cl, 11010000b
+        shl ecx, 16
+
+        pop edx
+        or ch, dl
+
+        or ch, 10010010b
+        mov cl, al
+        mov [ds:esi], ecx
+
+        and esi, 0xff
+
+        pop edx
+        pop ecx
+        pop ebx
+        pop eax
+        ret
+
+    .clear: ; ecx - process ID, ds - writable segment containing LDT.
+        push esi
+
+        xor esi, esi
+
+        .clear.loop:
+            call .deleteEntry
+
+            add esi, 8
+            cmp esi, 0x200*8
+            jle .clear.loop
+
+        pop esi
+        ret
+
+    .deleteEntry: ; ecx - Process ID, esi - LDT entry, ds - writable segment containing LDT.
+        push ecx
+        push esi
+
+        shl ecx, 3+8
+        and esi, 111111111111111111111111111000b
+        add esi, ecx
+        and byte [ds:esi+5], 0
+
+        pop esi
+        pop ecx
+        ret
+
+    .set: ; ecx - Process ID
+        push eax
+        push ecx
+        push edi
+        push fs
+
+        mov di, Segments.GDT_Write               ; preparing to write to GDT
+        mov fs, di
+        mov edi, ecx
+        shl edi, 3+4+4 ; *0x800
+
+        mov eax, edi
+        add eax, 0x100000
+
+        mov [fs:0x68+2], ax        ; writing BASE[0:15] of LDT
+
+        ror eax, 16
+
+        mov [fs:0x68+4], al        ; writing BASE[16:23] of LDT
+        mov [fs:0x68+7], ah        ; writing BASE[24:31] of LDT
+
+        shr eax, 16
+
+        mov ecx, 0x800             ; getting the address of LDT limit
+        add ecx, eax
+
+        mov [fs:0x68], cx          ; writing LIMIT[0:15] of LDT
+        shr ecx, 16
+        and byte [fs:0x68+6], 0xf0
+        and cl, 0xf0
+        or [fs:0x68+6], cl         ; writing LIMIT[16:19] of LDT
+
+        mov ecx, 0x68
+
+        lldt cx                    ; reloading LDTR
+
+        pop fs
+        pop edi
+        pop ecx
+        pop eax
+        ret

@@ -310,8 +310,8 @@ SelectVideoMode:
 				cmp ax, 0x004F
 				jne .error
 
-				mov dword [Vars+ScreenWidth], 800
-				mov dword [Vars+ScreenHeight], 600
+				mov dword [Vars+ScreenWidth], SCREEN_WIDTH
+				mov dword [Vars+ScreenHeight], SCREEN_HEIGHT
 
 			.done:
 
@@ -372,9 +372,9 @@ SetUpVBE2:
 		cmp ax, 0x004F
 		jne .error
 
-		cmp word [es:di+0x12], 800
+		cmp word [es:di+0x12], SCREEN_WIDTH
 		jne .loop
-		cmp word [es:di+0x14], 600
+		cmp word [es:di+0x14], SCREEN_HEIGHT
 		jne .loop
 		cmp byte [es:di+0x19], 32
 		jne .loop

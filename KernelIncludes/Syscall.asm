@@ -3,22 +3,23 @@ Syscall:
         pusha
         push es
 
-        mov ax, 0xA8
+        mov ax, Segments.ListOfSyscalls
         mov es, ax
 
-        mov ecx, 0x740>>2
+        mov ecx, 0x540>>2
         xor eax, eax
         xor edi, edi
 
         rep stosd
 
-        mov dword es:[(0x0<<2)+4],  Print.print
+        mov dword es:[(0x0<<2)+4],  Print.string
         mov dword es:[(0x1<<2)+4],  Print.clearScreen
         mov dword es:[(0x2<<2)+4],  Print.charSyscall
-        mov dword es:[(0x3<<2)+4],  Print.newLineSyscall
+        mov dword es:[(0x3<<2)+4],  Print.newLine
         mov dword es:[(0x4<<2)+4],  Print.decCursorPos
         mov dword es:[(0x5<<2)+4],  Draw.writeChar
         mov dword es:[(0x6<<2)+4],  Draw.writeStr
+        mov dword es:[(0x7<<2)+4],  Print.hex32_Syscall
         mov dword es:[(0x20<<2)+4], API.yield
         mov dword es:[(0x21<<2)+4], API.quickLoad
         mov dword es:[(0x22<<2)+4], API.processExit
@@ -35,7 +36,7 @@ Syscall:
         push eax
         push es
 
-        mov ax, 0xA8
+        mov ax, Segments.ListOfSyscalls
         mov es, ax
         shl ebx, 2
         mov ebx, es:[ebx+4]
@@ -59,7 +60,7 @@ Syscall:
         pusha
         push es
 
-        mov ax, 0xA8
+        mov ax, Segments.ListOfSyscalls
         mov es, ax
 
         ;mov eax, es:[0]

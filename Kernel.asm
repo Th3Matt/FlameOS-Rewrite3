@@ -7,33 +7,36 @@ section .text
 %include "KernelIncludes/Constants.asm"
 
 KernelInit32:
-	mov ax, 0x8
+	mov ax, Segments.KernelStack
 	mov ss, ax
-	mov ax, 0x28
+	mov ax, Segments.KernelCode
 	mov ds, ax
 	mov esp, 0x1000
 
+	mov ax, Segments.NULL
+	mov gs, ax				; clearing gs so function returns don't crash
+
 GraphicsModeSetUp:
-	mov ax, 0x10
+	mov ax, Segments.Variables
 	mov es, ax
-	cmp dword [es:0x1], 'VGAH'
+	cmp dword [es:GraphicsDriverNameString], 'VGAH'
 	jnz .notVGAHDriver
 	pushf
-	call 0x28:InitVGAH
+	call Segments.KernelCode:InitVGAH
 	jmp .done
 
 	.notVGAHDriver:
-	cmp dword [es:0x1], 'BOCH'
+	cmp dword [es:GraphicsDriverNameString], 'BOCH'
 	jnz .done
 	pushf
-	call 0x28:InitBGA
+	call Segments.KernelCode:InitBGA
 	;jmp .done
 
 	.done:
 
+	call Print.updateVariables
+
 ClearScreen:
-	mov ax, 0x0
-	mov gs, ax
 
 	call Print.clearScreen
 
@@ -41,12 +44,10 @@ KERNEL:
 	.loading:
 		mov es:[SOB.currentlySelectedEntry], byte 0
 
+        call Print.resetCurrentCursorPos
+
 		mov eax, 0xFFFFFFFF
-		xor edx, edx
-		mov dl, [StartupText]
-		mov esi, StartupText+1
-		mov edi, edx
-		xor edx, edx
+		mov esi, StartupText
 		xor ecx, ecx
 
 		call Print.string
@@ -102,19 +103,17 @@ KERNEL:
 
     	popa
 
-    	call Print.newLine
-
-    	push edx
-
-    	xor edx, edx
-		mov dl, [IDTloaded]
-		mov esi, IDTloaded+1
-		mov edi, edx
-		pop edx
+		mov esi, IDTloaded
 
 		xor ecx, ecx
 
 		call Print.string
+
+    	call Print.newLine
+
+; ----------------------------------------------------------------------------------------------
+;									Interrupts initialised
+; ----------------------------------------------------------------------------------------------
 
 		call ProcessManager.init
 		xor eax, eax
@@ -122,72 +121,69 @@ KERNEL:
         call ProcessManager.pauseProcess
 
         call MemoryManager.init
+
+; ----------------------------------------------------------------------------------------------
+;									Memory manager initialised
+; ----------------------------------------------------------------------------------------------
+
         call DeviceList.init
+
+        call Syscall.init
+        call GenericDrivers.init
 
         call PS2.init
         call PS2.initDevices
 
-        call Syscall.init
         call PS_2_Keyboard.init
 
-        ;xor eax, eax
-        ;mov ecx, 4
-		;call MemoryManager.memAlloc
-		;push eax
-
-        ;xor eax, eax
-		;call MemoryManager.memAlloc
-
-		;pop ebx
-		;xor eax, eax
-		;call MemoryManager.memFree
-
-		;xor eax, eax
-		;mov ecx, 2
-		;call MemoryManager.memAlloc
-
-		;xor eax, eax
-		;mov ecx, 5
-		;call MemoryManager.memAlloc
-
-		;xor eax, eax
-		;mov ecx, 2
-		;call MemoryManager.memAlloc
-
-        ;call MemoryManager.memAllocPrint
-
-        ;call MemoryManager.memFreeAll
-
-        ;call MemoryManager.memAllocPrint
-
-        mov ax, 0x58
+        mov ax, Segments.TSS2
         ltr ax
 
-        ;call MemoryManager.memAllocPrint
-
         call PCIDriver.detectDevices
+
+; ----------------------------------------------------------------------------------------------
+;								PCI and some devices initialised
+; ----------------------------------------------------------------------------------------------
 
         test byte es:[CustomSetting], 100b
         jnz PCITest
 
 		call S_ATA_PI.detectDevices
+		call AHCIDriver.initController
+
+; ----------------------------------------------------------------------------------------------
+;									Disk drivers initialised
+; ----------------------------------------------------------------------------------------------
+
 		call EDDV3Read
 
 		call Print.newLine
 
-        mov cx, 0x98
+        mov cx, Segments.SysLDT
         lldt cx
         call FlFS.init
 
         call VFS.init
 
-        mov ax, 0x88
+; ----------------------------------------------------------------------------------------------
+;								VFS and filesystem initialised
+; ----------------------------------------------------------------------------------------------
+
+        mov ax, Segments.FS_Header
         mov fs, ax
         mov esi, Strings.Terminal
         call FlFS.getFileNumber
-        jc NoBootFile
+        jnc .terminalFileFound
+        call NoTerminalFile
+        .terminalFileFound:
         cmp al, fs:[4]
-        jnz NoBootFile
+        jz .terminalFileAutorun
+		call DifferentAutorunFile
+		.terminalFileAutorun:
+
+		mov al, fs:[4]
+		cmp al, 0
+		jz .NoAutorunFile
 
         push edx
 
@@ -195,7 +191,7 @@ KERNEL:
         push eax
 
         push ds
-        mov ax, 0x70
+        mov ax, Segments.UserspaceMem
         mov ds, ax
         xor eax, eax
         mov ecx, ebx
@@ -213,12 +209,12 @@ KERNEL:
         dec ebx
         mov edx, 3
 
-        call MemoryManager.createLDTEntry
+        call LDT.createEntry
 
         pop ds
 		pop eax
 
-        call ProcessManager.setLDT
+        call LDT.set
 
         mov ds, si
         xor edi, edi
@@ -237,11 +233,21 @@ KERNEL:
 
         call SetUpSheduler
 
-        call Print.saveCurrentCursorPos
-        call Print.newLineSyscall
-        call Print.newLineSyscall
+        call Print.newLine
 
 		sti
+		hlt
+		jmp $-1
+
+	.NoAutorunFile:
+		call Print.newLine
+
+		mov eax, 0x00CC0000
+		xor ecx, ecx
+		mov esi, NoAutorunFile
+
+		call Print.string
+
 		hlt
 		jmp $-1
 
@@ -254,26 +260,45 @@ TestException:
 	mov edi, 0xFFFFFFFF
 	ud1
 
-NoBootFile:
+NoTerminalFile:
+	pusha
+
 	call Print.newLine
 
 	xor eax, eax
 	not eax
 	xor ecx, ecx
-	mov esi, .msg+1
-	mov di, [.msg]
-	and di, 0xff
+	mov esi, Prefix.kernel
 
 	call Print.string
 
 	mov eax, 0x00CC0000
-	mov esi, .msg2+1
-	mov di, [.msg2]
-	and di, 0xff
+	mov esi, .msg
 
 	call Print.string
-	hlt
-	jmp $-1
+
+	popa
+	ret
+
+DifferentAutorunFile:
+	pusha
+
+	call Print.newLine
+
+	xor eax, eax
+	not eax
+	xor ecx, ecx
+	mov esi, Prefix.kernel
+
+	call Print.string
+
+	mov eax, 0x00CC0000
+	mov esi, .msg
+
+	call Print.string
+
+	popa
+	ret
 
 PCITest:
 	call PCIDriver.printDeviceTable
@@ -325,7 +350,7 @@ Conv:
         push ebx
         push dx
 
-        mov bx, 0x28
+        mov bx, Segments.KernelCode
         mov ds, bx
         shr dl, 4
 
@@ -375,7 +400,7 @@ DebugMode:
 		push eax
 		push es
 
-		mov ax, 0x40
+		mov ax, Segments.ProcessData
 		mov es, ax
 
 		or dword es:[PMDB.flags], 10b ; turn on debug mode
@@ -388,13 +413,13 @@ DebugMode:
 		pusha
 		push ds
 
-		mov ax, 0x20
+		mov ax, Segments.IDT
 		mov ds, ax
 
 		mov eax, IRQHandlers.timerInterruptForcedTextMode
 		mov  bh, 10001110b ; DPL 0, Interrupt Gate
 		mov ecx, 0x20 ; Timer IRQ
-		mov edx, 0x28 ; Kernel code
+		mov edx, Segments.KernelCode ; Kernel code
 
 		call IDT.modEntry
 
@@ -410,11 +435,11 @@ DebugMode:
 		xor eax, eax ; Clearing handler address
 		mov bh, 10000101b ; DPL 0, Task Gate
 		mov ecx, 0x20 ; Timer IRQ
-		mov edx, 0x50 ; TSS 1
+		mov edx, Segments.TSS1 ; TSS 1
 
 		call IDT.modEntry
 
-		mov ax, 0x40
+		mov ax, Segments.ProcessData
 		mov es, ax
 
 		and dword es:[PMDB.flags], 0xFFFFFFFD ; turn off debug mode
@@ -438,6 +463,7 @@ Power:
 
 %include "Drivers/VGA.asm"
 %include "Drivers/ATA.asm"
+%include "Drivers/AHCI.asm"
 %include "Drivers/PCI.asm"
 %include "Drivers/VFS.asm"
 %include "Drivers/FLFS.asm"
@@ -454,21 +480,27 @@ Power:
 %include "KernelIncludes/Syscall.asm"
 %include "KernelIncludes/DeviceListTools.asm"
 
+%include "GenericDrivers/GenericInit.asm"
+
 section .rodata
 
 
 StartupText:  db (.end-$-1), "Kernel: FlameOS Starting up...", 10
-			  db             "Kernel: Video driver initialised."
+			  db             "Kernel: Video driver initialised.", 10
 	.end:
 
-IDTloaded:	  db (.end-$-1), "Kernel: IDT initialised."
+IDTloaded:	  db (.end-$-1), "Kernel: IDT initialised.", 10
+	.end:
+
+NoAutorunFile:	  db (.end-$-1), "Kernel: Autorun file index is corrupt.", 10
 	.end:
 
 Conv.HexConvTable: db "0123456789ABCDEF"
 
-NoBootFile.msg: db NoBootFile.msg2-NoBootFile.msg-1, "Kernel: "
-NoBootFile.msg2: db NoBootFile.end-NoBootFile.msg2-1, "Boot file is missing or filename is incorrect."
-NoBootFile.end:
+Prefix.kernel: db NoTerminalFile.msg-Prefix.kernel-1, "Kernel: "
+NoTerminalFile.msg: db DifferentAutorunFile.msg-NoTerminalFile.msg-1, "Terminal file is missing or filename is modified."
+DifferentAutorunFile.msg: db NoTerminalFile.end-DifferentAutorunFile.msg-1, "Autorun file index is modified."
+NoTerminalFile.end:
 
 
 Strings:

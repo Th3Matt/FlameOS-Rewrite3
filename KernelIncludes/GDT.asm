@@ -126,8 +126,8 @@
 
     add di, 4
                     ;---------------------38       -      38         -   Video RAM
-                    ;a0000 - e6500 or PCI device 1234:1111 BAR0
-    mov ax, (800*600*4)>>12
+                    ;PCI device 1234:1111 BAR0
+    mov ax, ((SCREEN_WIDTH*SCREEN_HEIGHT*4)>>12)+1
     mov [di], ax
 
     add di, 2
@@ -307,13 +307,13 @@
 
     add di, 4
                     ;---------------------80       -      80         -   PCI Driver Data
-                    ;9000 - 9fff
-    mov ax, 0xfff
+                    ;50000 - 5ffff
+    mov ax, 0xffff
     mov [di], ax
 
     add di, 2
 
-    mov ax, 0x9000
+    xor ax, ax
     mov [di], ax
 
     add di, 2
@@ -322,7 +322,7 @@
     mov ch, 01010000b
     shl ecx, 8
     mov ch, 10010010b
-    ;mov cl, 0x0
+    mov cl, 0x05
     mov [di], ecx
 
     add di, 4
@@ -346,26 +346,7 @@
     mov [di], ecx
 
     add di, 4
-                    ;---------------------90       -      90         -   VFS Data
-                    ;c000 - cfff
-    mov ax, 0xfff
-    mov [di], ax
-
-    add di, 2
-
-    mov ax, 0xc000
-    mov [di], ax
-
-    add di, 2
-
-    xor ecx, ecx
-    mov ch, 01010000b
-    shl ecx, 8
-    mov ch, 10010010b
-    ;mov cl, 0x0
-    mov [di], ecx
-
-    add di, 4
+    add di, 4+2+2
                     ;---------------------98       -      98         -   System LDT
                     ;100000-100fff
     mov bx, 0xfff
@@ -387,8 +368,28 @@
 
     add di, 4
                     ;---------------------A0       -      A0        -   Charmap of screen
-                    ;d000 - 178C0
-    mov bx, 0xA8C0
+                    ;60000
+    mov bx, ((SCREEN_WIDTH*SCREEN_HEIGHT*9/100)>>12)+1
+    mov [di], bx
+
+    add di, 2
+
+    xor ax, ax
+    mov [di], ax
+
+    add di, 2
+
+    xor ecx, ecx
+    mov ch, 11010000b
+    shl ecx, 8
+    mov ch, 10010010b
+    mov cl, 6
+    mov [di], ecx
+
+    add di, 4
+                    ;---------------------A8       -      A8        -   List of Syscalls
+                    ;d000 - e000
+    mov bx, 0x1000
     mov [di], bx
 
     add di, 2
@@ -406,34 +407,14 @@
     mov [di], ecx
 
     add di, 4
-                    ;---------------------A8       -      A8        -   List of Syscalls
-                    ;178C0 - 18000
-    mov bx, 0x740
-    mov [di], bx
-
-    add di, 2
-
-    mov ax, 0x78C0
-    mov [di], ax
-
-    add di, 2
-
-    xor ecx, ecx
-    mov ch, 01010000b
-    shl ecx, 8
-    mov ch, 10010010b
-    mov cl, 0x1
-    mov [di], ecx
-
-    add di, 4
                     ;---------------------B0       -      B0        -   Devices List
-                    ;18000 - 1A000
-    mov bx, 0x2000
+                    ;40000 - 4ffff
+    mov bx, 0xffff
     mov [di], bx
 
     add di, 2
 
-    mov ax, 0x8000
+    xor ax, ax
     mov [di], ax
 
     add di, 2
@@ -442,18 +423,18 @@
     mov ch, 01010000b
     shl ecx, 8
     mov ch, 10010010b
-    mov cl, 0x1
+    mov cl, 0x4
     mov [di], ecx
 
     add di, 4
                     ;---------------------B8       -      B8        -   BIOS Data
                     ;80000 - 9FFFF
-    xor bx, bx
+    mov bx, 0xFFFF
     mov [di], bx
 
     add di, 2
 
-    mov ax, 0xFFFF
+    xor ax, ax
     mov [di], ax
 
     add di, 2
@@ -463,6 +444,44 @@
     shl ecx, 8
     mov ch, 10010010b
     mov cl, 0x8
+    mov [di], ecx
+
+    add di, 4
+                    ;---------------------C0       -      C0        -   All Memory
+                    ;0 - FFFFFFFF
+    mov bx, 0xFFFF
+    mov [di], bx
+
+    add di, 2
+
+    xor ax, ax
+    mov [di], ax
+
+    add di, 2
+
+    xor ecx, ecx
+    mov ch, 11011111b
+    shl ecx, 8
+    mov ch, 10010010b
+    mov [di], ecx
+
+    add di, 4
+                    ;---------------------C8       -      C8        -   AHCI ABAR
+                    ;7000 - 77ff
+    mov bx, 0x7ff
+    mov [di], bx
+
+    add di, 2
+
+    mov ax, 0x7000
+    mov [di], ax
+
+    add di, 2
+
+    xor ecx, ecx
+    mov ch, 01010000b
+    shl ecx, 8
+    mov ch, 10010010b
     mov [di], ecx
 
     add di, 4       ;=====================
@@ -485,6 +504,6 @@
     or al, 1       ; set PE (Protection Enable) bit in CR0 (Control Register 0)
     mov cr0, eax
 
-    jmp 0x28:0
+    jmp Segments.KernelCode:0
 
     SetGDT:

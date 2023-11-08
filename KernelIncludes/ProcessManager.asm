@@ -12,7 +12,7 @@ ProcessManager:
 		push eax
 		push ecx
 
-		mov ax, 0x40 ; Clearing process manager data segment
+		mov ax, Segments.ProcessData ; Clearing process manager data segment
 		mov es, ax
 
 		xor eax, eax
@@ -22,7 +22,7 @@ ProcessManager:
 		rep stosb ;[edi]
         dec dword [es:PMDB.ammoutOfActiveProcesses] ; hiding the kernel process
 
-		mov cx, 0x70 ; Clearing LDT lists
+		mov cx, Segments.UserspaceMem ; Clearing LDT lists
 		mov es, cx
 
 		mov ecx, 0x800*32/4
@@ -45,7 +45,7 @@ ProcessManager:
 		push eax
 
 		xor edi, edi
-		mov ax, 0x40
+		mov ax, Segments.ProcessData
 		mov es, ax
 		mov eax, [es:edi] ; read current process list dword
 		xor ecx, ecx
@@ -91,7 +91,7 @@ ProcessManager:
 		push eax
 
 		xor edi, edi
-		mov ax, 0x40
+		mov ax, Segments.ProcessData
 		mov es, ax
 		mov eax, [es:edi] ; read current process list dword
 		xor ecx, ecx
@@ -155,7 +155,7 @@ ProcessManager:
 
         push es
         push eax
-        mov ax, 0x40
+        mov ax, Segments.ProcessData
         mov es, ax
         pop eax
 
@@ -194,7 +194,7 @@ ProcessManager:
 
         push es
         push eax
-        mov ax, 0x40
+        mov ax, Segments.ProcessData
         mov es, ax
         pop eax
 
@@ -232,7 +232,7 @@ ProcessManager:
 
         push es
         push eax
-        mov ax, 0x40
+        mov ax, Segments.ProcessData
         mov es, ax
         pop eax
 
@@ -248,10 +248,10 @@ ProcessManager:
         call MemoryManager.memFreeAll
         pop eax
 
-        mov bx, 0x70
+        mov bx, Segments.UserspaceMem
         push ds
         mov ds, bx
-        call MemoryManager.clearLDT
+        call LDT.clear
         pop ds
 
         dec dword [es:PMDB.ammoutOfActiveProcesses]
@@ -272,7 +272,7 @@ ProcessManager:
         pusha
 
 		xor edi, edi
-		mov ax, 0x40
+		mov ax, Segments.ProcessData
 		mov es, ax
 		mov eax, [es:edi]
 		xor edx, edx
@@ -310,48 +310,6 @@ ProcessManager:
 
             ret
 
-    .setLDT: ; ecx - Process ID
-        push eax
-        push ecx
-        push edi
-        push fs
-
-        mov di, 0x60               ; preparing to write to GDT
-        mov fs, di
-        mov edi, ecx
-        shl edi, 3+4+4 ; *0x800
-
-        mov eax, edi
-        add eax, 0x100000
-
-        mov [fs:0x68+2], ax        ; writing BASE[0:15] of LDT
-
-        ror eax, 16
-
-        mov [fs:0x68+4], al        ; writing BASE[16:23] of LDT
-        mov [fs:0x68+7], ah        ; writing BASE[24:31] of LDT
-
-        shr eax, 16
-
-        mov ecx, 0x800             ; getting the address of LDT limit
-        add ecx, eax
-
-        mov [fs:0x68], cx          ; writing LIMIT[0:15] of LDT
-        shr ecx, 16
-        and byte [fs:0x68+6], 0xf0
-        and cl, 0xf0
-        or [fs:0x68+6], cl         ; writing LIMIT[16:19] of LDT
-
-        mov ecx, 0x68
-
-        lldt cx                    ; reloading LDTR
-
-        pop fs
-        pop edi
-        pop ecx
-        pop eax
-        ret
-
     .setUpTask: ; eax - ESP0, ebx - ESP, ecx - Process ID, edx - EIP, esi - CS+(SS<<16), edi - SS0
         push ds
         push es
@@ -365,7 +323,7 @@ ProcessManager:
         push edi
         push esi
 
-        mov di, 0x70
+        mov di, Segments.UserspaceMem
         mov es, di
 
         mov edi, ecx
@@ -374,7 +332,7 @@ ProcessManager:
 
         push ecx
 
-        call .setLDT
+        call LDT.set
 
         pop ecx
         mov eax, ecx
@@ -461,13 +419,13 @@ ProcessManager:
         ret
 
     .sheduler:
-        mov ax, 0x40
+        mov ax, Segments.ProcessData
 		mov es, ax
 
         mov ecx, [es:PMDB.shedulerCurrentProcessNumber]
-        call .setLDT
+        call LDT.set
 
-        mov cx, 0x48               ; preparing to read from current TSS
+        mov cx, Segments.TSS_Write               ; preparing to read from current TSS
         mov ds, cx
         mov cx, (3<<3)+100b           ; preparing to write to saved TSS
         mov es, cx
@@ -481,7 +439,7 @@ ProcessManager:
 
         .sheduler.skipWrite: ; sheduler entry point for when we don't need to save previous task context
 
-        mov ax, 0x40
+        mov ax, Segments.ProcessData
 		mov es, ax
 
         mov ecx, [es:PMDB.shedulerCurrentProcessNumber]           ; get task #
@@ -510,9 +468,9 @@ ProcessManager:
         push eax
         push ecx
 
-         call .setLDT
+         call LDT.set
 
-         mov cx, 0x48               ; preparing to write to TSS
+         mov cx, Segments.TSS_Write               ; preparing to write to TSS
          mov es, cx
 
          mov es:[PMDB.activeProcessMask], word 0x58
@@ -531,7 +489,7 @@ ProcessManager:
         xor eax, eax
         mov ds, ax
 
-        mov ax, 0x40
+        mov ax, Segments.ProcessData
 		mov es, ax
 
         pop ecx
@@ -553,7 +511,7 @@ ProcessManager:
         push eax
         push es
 
-        mov ax, 0x40
+        mov ax, Segments.ProcessData
 		mov es, ax
 
         mov ecx, [es:PMDB.shedulerCurrentProcessNumber]

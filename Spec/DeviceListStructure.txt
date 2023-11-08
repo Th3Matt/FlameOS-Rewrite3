@@ -1,17 +1,21 @@
 0th Entry:
     Number of populated entries - word
-    nothing                     - 30 bytes
+    nothing                     - 126 bytes
 
 Entry:
     Device type                 - word
         1 - Controller
         2 - Keyboard
         3 - Mouse
+        4 - Disk
 
     Parent device               - word ; if top level then 0
 
     Protocol                    - word
         1 - PS/2
+        2 - PATA
+        3 - SATA
+        4 - PCI
 
-    Additional info for driver  - 22 bytes
+    Additional info for driver  - 122 bytes
 

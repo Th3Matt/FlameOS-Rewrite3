@@ -3,7 +3,7 @@ IRQHandlers:
         push eax
 
         push ds
-        mov ax, 0x10
+        mov ax, Segments.Variables
         mov ds, ax
 
         inc dword ds:[Clock.clockTicks]
@@ -22,7 +22,7 @@ IRQHandlers:
         push eax
 
         push ds
-        mov ax, 0x10
+        mov ax, Segments.Variables
         mov ds, ax
 
         inc dword ds:[Clock.clockTicks]
@@ -40,7 +40,7 @@ IRQHandlers:
 
     .timerInterrupt2:
         push es
-        mov ax, 0x10
+        mov ax, Segments.Variables
         mov es, ax
 
         inc dword es:[Clock.clockTicks]
@@ -94,7 +94,7 @@ SetUpInterrupts:
     pusha
     push es
 
-    mov ax, 0x48
+    mov ax, Segments.TSS_Write
     mov es, ax
 
     xor eax, eax
@@ -103,53 +103,53 @@ SetUpInterrupts:
     rep stosd
 
     push ds
-    mov ax, 0x20
+    mov ax, Segments.IDT
     mov ds, ax
 
     mov eax, Exceptions.UD
     mov  bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0x6
-    mov edx, 0x28 ; Kernel code
+    mov edx, Segments.KernelCode ; Kernel code
 
     call IDT.modEntry
 
     mov eax, Exceptions.DF
     mov  bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0x8
-    mov edx, 0x28 ; Kernel code
+    mov edx, Segments.KernelCode ; Kernel code
 
     call IDT.modEntry
 
     mov eax, Exceptions.TS
     mov  bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0xA
-    mov edx, 0x28 ; Kernel code
+    mov edx, Segments.KernelCode ; Kernel code
 
     call IDT.modEntry
 
     mov eax, Exceptions.NP
     mov  bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0xB
-    mov edx, 0x28 ; Kernel code
+    mov edx, Segments.KernelCode ; Kernel code
 
     call IDT.modEntry
 
     mov eax, Exceptions.SS
     mov  bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0xC
-    mov edx, 0x28 ; Kernel code
+    mov edx, Segments.KernelCode ; Kernel code
 
     call IDT.modEntry
 
     mov eax, Exceptions.GP
     mov  bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0xD
-    mov edx, 0x28 ; Kernel code
+    mov edx, Segments.KernelCode ; Kernel code
 
     call IDT.modEntry
 
     push ds
-    mov ax, 0x10
+    mov ax, Segments.Variables
     mov ds, ax
 
     mov dword ds:[Clock.clockTicks], 0
@@ -159,14 +159,14 @@ SetUpInterrupts:
     mov eax, IRQHandlers.timerInterrupt
     mov  bh, 10001110b ; DPL 0, Interrupt Gate
     mov ecx, 0x20 ; Timer IRQ
-    mov edx, 0x28 ; Kernel code
+    mov edx, Segments.KernelCode ; Kernel code
 
     call IDT.modEntry
 
     mov eax, Syscall.run
     mov  bh, 11101110b ; DPL 3, Interrupt Gate
     mov ecx, 0x30 ; Syscall
-    mov edx, 0x28 ; Kernel code
+    mov edx, Segments.KernelCode ; Kernel code
 
     call IDT.modEntry
 
@@ -184,7 +184,7 @@ SetUpSheduler:
     pusha
     push es
 
-    mov ax, 0x48
+    mov ax, Segments.TSS_Write
     mov es, ax
 
     mov es:[0x20], dword IRQHandlers.timerInterrupt2
@@ -197,7 +197,7 @@ SetUpSheduler:
     mov es:[0x60], word 0x98
 
     push ds
-    mov ax, 0x20
+    mov ax, Segments.IDT
     mov ds, ax
 
     xor eax, eax ; Clearing handler address
@@ -241,24 +241,23 @@ Exceptions:
         pusha
 
         push gs
-        mov ax, 0x38
+        mov ax, Segments.VRAM_Graphics
         mov gs, ax
 
 
         call Print.clearScreen
 
         pop gs
-        mov ax, 0x38
+        mov ax, Segments.VRAM_Graphics
         mov es, ax
         mov gs, ax
-        mov ax, 0x10
+        mov ax, Segments.Variables
         mov ds, ax
-        mov ax, 0xA0
+        mov ax, Segments.CharmapOfScreen
         mov fs, ax
 
         xor edi, edi
-        xor ecx, ecx
-        mov cx, ds:[ScreenWidth]
+        mov ecx, ds:[ScreenWidth]
         push ecx
 
         mov eax, (21*2)
@@ -294,7 +293,6 @@ Exceptions:
         mov ecx, eax
 
         mov eax, 9
-        xor edx, edx
         xchg eax, edi
         mul edi
         xchg eax, edi
@@ -317,15 +315,15 @@ Exceptions:
 
         xor edx, edx
 
+        call Print.resetCurrentCursorPos
+
         mov ecx, 3
 
         call Print.newLine
         loop $-5
 
         mov eax, 0x00ff0000
-        mov esi, .Exception+2
-        xor edi, edi
-        mov di, [.Exception]
+        mov esi, .Exception
 
         call Print.string
 
@@ -336,8 +334,7 @@ Exceptions:
 
         mov eax, 0x00fffffff
         ;mov edx, 800/20*(6)*21
-        mov esi, .Exception.2+2
-        mov di, [.Exception.2]
+        mov esi, .Exception.2
         mov ecx, 0x00aa6600
         call Print.string
 
@@ -349,23 +346,22 @@ Exceptions:
         call Print.char
         xchg esp, ebp
 
-        inc edx
         pop bx
         xchg esp, ebp ; Using Handler stack
         call Print.char
 
-        add edx, 5
+        mov ebx, " "
+        call Print.char
 
-        mov esi, .Exception.3+2
-        mov di, [.Exception.3]
+        mov esi, .Exception.3
         mov ecx, 0x00aa6600
         call Print.string
         xchg esp, ebp
 
-        pop ecx
+        pop ebx
         xchg esp, ebp ; Using Handler stack
 
-        mov ebx, 0x00aa6600
+        mov ecx, 0x00aa6600
         call Print.hex32
 
         mov ecx, 10
@@ -373,25 +369,42 @@ Exceptions:
         call Print.newLine
         loop $-5
 
-        mov esi, .Exception.4+2
-        mov di, [.Exception.4]
+        mov esi, .Exception.EAX
+        movzx edi, byte [.Exception.registerTitleSize]
         mov ecx, 0x00aa6600
-        call Print.string
+        call Print.stringWithSize
 
-        sub edx, 15*2+7*2+4
-        mov ecx, ss:[esp+28]
+        mov ebx, ss:[esp+28]
         call Print.hex32
 
-        add edx, 8
-        mov ecx, ss:[esp+16]
+        mov ebx, " "
+        call Print.char
+
+        mov esi, .Exception.EBX
+        movzx edi, byte [.Exception.registerTitleSize]
+        call Print.stringWithSize
+
+        mov ebx, ss:[esp+16]
         call Print.hex32
 
-        add edx, 8
-        mov ecx, ss:[esp+24]
+        mov ebx, " "
+        call Print.char
+
+        mov esi, .Exception.ECX
+        movzx edi, byte [.Exception.registerTitleSize]
+        call Print.stringWithSize
+
+        mov ebx, ss:[esp+24]
         call Print.hex32
 
-        add edx, 8
-        mov ecx, ss:[esp+20]
+        mov ebx, " "
+        call Print.char
+
+        mov esi, .Exception.EDX
+        movzx edi, byte [.Exception.registerTitleSize]
+        call Print.stringWithSize
+
+        mov ebx, ss:[esp+20]
         call Print.hex32
 
         mov ecx, 2
@@ -399,17 +412,22 @@ Exceptions:
         call Print.newLine
         loop $-5
 
-        mov esi, .Exception.5+2
-        mov di, [.Exception.5]
+        mov esi, .Exception.ESI
+        movzx edi, byte [.Exception.registerTitleSize]
         mov ecx, 0x00aa6600
-        call Print.string
+        call Print.stringWithSize
 
-        sub edx, 7*2+2
-        mov ecx, ss:[esp+4]
+        mov ebx, ss:[esp+4]
         call Print.hex32
 
-        add edx, 8
-        mov ecx, ss:[esp]
+        mov ebx, " "
+        call Print.char
+
+        mov esi, .Exception.EDI
+        movzx edi, byte [.Exception.registerTitleSize]
+        call Print.stringWithSize
+
+        mov ebx, ss:[esp]
         call Print.hex32
 
         mov ecx, 10
@@ -417,14 +435,14 @@ Exceptions:
         call Print.newLine
         loop $-5
 
-        add edx, 800/20*21-(800/20/2-(.Exception.end-.Exception.6-2))*21
-        mov esi, .Exception.6+2
-        mov di, [.Exception.6]
+        add edx, 800/20*21-(800/20/2-(.Exception.registerTitleSize))*21
+        mov esi, .Exception.EIP
+        movzx edi, byte [.Exception.registerTitleSize]
         mov ecx, 0x00aa6600
-        call Print.string
+        call Print.stringWithSize
         xchg esp, ebp
 
-        pop ecx
+        pop ebx
         mov esp, ebp ; Using only handler stack
 
         call Print.hex32
@@ -436,23 +454,22 @@ Exceptions:
 
     section .rodata
 
-    .Exception:   dw (.Exception.2-.Exception-2)
+    .Exception:   db (.Exception.2-.Exception-1)
                   db ",---EXCEPTION--------!!!"
 
-    .Exception.2: dw (.Exception.3-.Exception.2-2)
+    .Exception.2: db (.Exception.3-.Exception.2-1)
                   db "Exception: #"
 
-    .Exception.3: dw (.Exception.4-.Exception.3-2)
+    .Exception.3: db (.Exception.registerTitleSize-.Exception.3-1)
                   db "Error Code: 0x"
 
-    .Exception.4: dw (.Exception.5-.Exception.4-2)
-                  db "EAX: 0x         EBX: 0x         ECX: 0x         EDX: 0x"
-
-    .Exception.5: dw (.Exception.6-.Exception.5-2)
-                  db "ESI: 0x         EDI: 0x"
-
-    .Exception.6: dw (.Exception.end-.Exception.6-2)
-                  db "EIP:  0x"
-    .Exception.end:
+    .Exception.registerTitleSize: db (.Exception.EBX-.Exception.EAX)
+    .Exception.EAX: db "EAX: 0x"
+    .Exception.EBX: db "EBX: 0x"
+    .Exception.ECX: db "ECX: 0x"
+    .Exception.EDX: db "EDX: 0x"
+    .Exception.ESI: db "ESI: 0x"
+    .Exception.EDI: db "EDI: 0x"
+    .Exception.EIP: db "EIP: 0x"
 
     section .text

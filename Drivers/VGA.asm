@@ -379,10 +379,10 @@ InitBGA:
 	out dx, ax ;0x1CE
 
 	push es
-	mov ax, 0x10
+	mov ax, Segments.Variables
 	mov es, ax
 
-	mov ax, 800		; X
+	mov eax, SCREEN_WIDTH		; X
 	mov [es:ScreenWidth], ax
 	inc dx
 	out dx, ax ;0x1CF
@@ -391,7 +391,7 @@ InitBGA:
 	dec dx
 	out dx, ax ;0x1CE
 
-	mov ax, 600		;	Y
+	mov eax, SCREEN_HEIGHT		;	Y
 	mov [es:ScreenHeight], ax
 	inc dx
 	out dx, ax ;0x1CF

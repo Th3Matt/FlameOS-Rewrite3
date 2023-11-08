@@ -20,7 +20,7 @@ API:
 
         sti
         push es
-        mov ax, 0x40
+        mov ax, Segments.ProcessData
         mov es, ax
         shl ecx, 4
 
@@ -54,7 +54,7 @@ API:
 
         call Print.delFramebuffer
 
-        mov ax, 0x40
+        mov ax, Segments.ProcessData
         mov es, ax
 
         and dword es:[PMDB.flags], 0xFFFFFFFE
@@ -63,7 +63,16 @@ API:
         hlt
         jmp $-1
 
-    .usermodeAllocate: ; ecx - requested blocks of 4 KiB. Output: si - segment.
+    .usermodeAllocate:
+        push edx
+
+        mov edx, 3
+        call .alloc
+
+        pop edx
+        ret
+
+    .alloc: ; ecx - requested blocks of 4 KiB, edx - cpu ring. Output: si - segment.
         push eax
         push ebx
         push ecx
@@ -77,32 +86,34 @@ API:
         call MemoryManager.memAlloc
         push eax
 
-        mov eax, 0x1000
-        mul ecx
+        push edx
+        mov eax, 0x1000  ;
+        mul ecx          ; Calculating size
+        mov ebx, eax     ;
+        dec ebx          ;
+        pop edx
 
-        mov ebx, eax
-        dec ebx
         pop eax
 
-        mov edx, 3
-
         push ds
-        mov si, 0x70
+        mov si, Segments.UserspaceMem
         mov ds, si
 
         call ProcessManager.getCurrentPID
 
-        call MemoryManager.createLDTEntry
+        call LDT.createEntry
 
-        or esi, 111b
+        or esi, edx
+        or esi, 100b
 
         push es
         mov es, si
         xor edi, edi
         xor eax, eax
         mov ecx, ebx
+        inc ecx
 
-        rep stosb
+        rep stosb ; clearing memory (for security)
         pop es
 
         pop ds
@@ -168,7 +179,7 @@ API:
 
     .readClock: ; Output: eax - clock ticks
         push ds
-        mov ax, 0x10
+        mov ax, Segments.Variables
         mov ds, ax
 
         mov eax, ds:[Clock.clockTicks]

@@ -21,7 +21,11 @@ Vars.directionList equ 15
 
 StartX equ 24
 StartY equ 25
-StartSize equ 3
+StartSize equ 9
+MaxDirectionListSize equ 0x73B
+
+SCREEN_WIDTH  equ 800
+SCREEN_HEIGHT equ 600
 
 Snake:
 	push cs
@@ -42,13 +46,13 @@ Snake:
     int 0x30
     mov fs, si
 
-    .mainMenu.refresh:
+    .mainMenu:
 
 	push es
 	mov bx, gs
 	mov es, bx
 
-	mov ecx, 800*600
+	mov ecx, SCREEN_WIDTH*SCREEN_HEIGHT
 	xor eax, eax
 	not eax
 	xor edi, edi
@@ -58,7 +62,7 @@ Snake:
 
 	xor eax, eax
 	mov ecx, eax
-	mov edi, (800*4/2)+(800*(600-5*2)*4/2)-(5*2*(Str.end-Str)*4/2)
+	mov edi, (SCREEN_WIDTH*4/2)+(SCREEN_WIDTH*(SCREEN_HEIGHT-5*2)*4/2)-(5*2*(Str.end-Str)*4/2)
 	not eax
 	mov esi, Str+1
 	xor edx, edx
@@ -67,27 +71,28 @@ Snake:
 
 	int 0x30 ; Print line 1
 
-	mov edi, (800*4/2)+(800*4*(600-5*2)/2)+(800*4*5*2)-(5*2*(Str2.end-Str2)*4/2)
+	mov edi, (SCREEN_WIDTH*4/2)+(SCREEN_WIDTH*4*(SCREEN_HEIGHT-5*2)/2)+(SCREEN_WIDTH*4*5*2)-(5*2*(Str2.end-Str2)*4/2)
 	mov esi, Str2+1
 	xor edx, edx
 	mov dl, ds:[esi-1]
 
 	int 0x30 ; Print line 2
-	mov edi, (800*4/2)+(800*4*(600-5*2)/2)+(800*4*5*2*2)-(5*2*(Str3.end-Str3)*4/2)
+
+	mov edi, (SCREEN_WIDTH*4/2)+(SCREEN_WIDTH*4*(SCREEN_HEIGHT-5*2)/2)+(SCREEN_WIDTH*4*5*2*2)-(5*2*(Str3.end-Str3)*4/2)
 	mov esi, Str3+1
 	xor edx, edx
 	mov dl, ds:[esi-1]
 
 	int 0x30 ; Print line 2
 
-	.mainMenu:
+	.mainMenu.loop:
         mov ebx, 0x20
         int 0x30
 
         mov ebx, 0x10
         int 0x30
         cmp eax, 0x0
-        jz .mainMenu
+        jz .mainMenu.loop
 
         cmp eax, 0x15 ; Q
         jz .quit
@@ -95,7 +100,7 @@ Snake:
         cmp eax, 0x29 ; Space
         jz .start
 
-        jmp .mainMenu
+        jmp .mainMenu.loop
 
     .mainMenu.fromGame:
         mov ebx, 0x20
@@ -103,10 +108,13 @@ Snake:
 
 		mov ebx, 0x10
         int 0x30
-        cmp eax, 0x0
-        jz .mainMenu.refresh
+        cmp eax, 0xF0 ; wait for q to be released
+        jnz .mainMenu.fromGame
 
-        jmp .mainMenu.fromGame
+        mov ebx, 0x10
+        int 0x30
+
+        jmp .mainMenu
 
     .error1:
 		push es
@@ -114,7 +122,7 @@ Snake:
 		mov es, bx
 
 		xor edi, edi
-		mov ecx, 800*600
+		mov ecx, SCREEN_WIDTH*SCREEN_HEIGHT
 		xor eax, eax
 		rep stosd
 
@@ -159,7 +167,7 @@ Snake:
 		mov es, bx
 
 		xor edi, edi
-		mov ecx, 800*600
+		mov ecx, SCREEN_WIDTH*SCREEN_HEIGHT
 		xor eax, eax
 		rep stosd
 
@@ -252,7 +260,14 @@ Snake:
 		.loop.coord.done:
 
 		mov si, fs:[Vars.directionListWritePtr]
+		cmp si, 0
+		jnz .loop.previousDirection.done
+
+		mov si, MaxDirectionListSize+1
+
+		.loop.previousDirection.done:
 		dec si
+
 		mov dl, fs:[si+Vars.directionList]
 
 		shl dl, 2
@@ -280,13 +295,39 @@ Snake:
 		mov si, fs:[Vars.directionListReadPtr]
 		push di
 		mov di, fs:[Vars.directionListWritePtr]
+		cmp di, si
+		jge .loop.tail.coord.notWraparound
+
+		sub di, MaxDirectionListSize+1
+		not di
+		inc di
+
+		add di, si
+
+		jmp .loop.tail.coord.wraparound.done
+
+		.loop.tail.coord.notWraparound:
 		sub di, si
+
+		.loop.tail.coord.wraparound.done:
+
 		cmp di, fs:[Vars.snakeLength]
 		pop di
 		jl .loop.tail.coord.done
+
 		xor eax, eax
 		mov al, fs:[si+Vars.directionList]
+
+		.loop.readPtr:
 		inc word fs:[Vars.directionListReadPtr]
+		inc si
+		cmp si, MaxDirectionListSize+1
+		jl .loop.tail
+
+		 .loop.readPtr.overflow:
+			mov word fs:[Vars.directionListReadPtr], 0
+
+		.loop.tail:
 
 		test al, 00000010b
 		jnz .loop.tail.coordAdd
@@ -343,13 +384,13 @@ Snake:
 		mov si, fs:[Vars.directionListWritePtr]
 		mov fs:[si+Vars.directionList], al
 
-		cmp si, 0x73B
-		jge .loop.ptr.overflow
+		cmp si, MaxDirectionListSize
+		jge .loop.writePtr.overflow
 
 		inc word fs:[Vars.directionListWritePtr]
 		jmp .loop.move
 
-		 .loop.ptr.overflow:
+		 .loop.writePtr.overflow:
 			mov word fs:[Vars.directionListWritePtr], 0
 
 		.loop.move:
@@ -445,7 +486,7 @@ DrawInTiles:; es:esi - sprite, di - x, edi>>16 - y, edx - foreground color, ebx 
 	push eax
 	push edx
 
-	mov eax, 800*4*2
+	mov eax, SCREEN_WIDTH*4*2
 	mul edi
 
 	add esi, eax
@@ -496,7 +537,7 @@ DrawSprite: ; es:esi - sprite, gs:edi - screen, edx - foreground color, ebx - ba
 			push ecx
 			jnz .loop.loop
 
-		add edi, (400-4)*2
+		add edi, (SCREEN_WIDTH/2-4)*2
 		inc esi
 		pop ecx
 		pop ecx
@@ -517,7 +558,7 @@ DrawBlock:
 	mov gs:[edi], ebx
 	mov gs:[edi+4], ebx
 
-	add edi, (800)*4
+	add edi, (SCREEN_WIDTH)*4
 
 	mov gs:[edi], ebx
 	mov gs:[edi+4], ebx

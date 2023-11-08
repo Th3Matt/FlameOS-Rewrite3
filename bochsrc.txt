@@ -15,7 +15,7 @@ ata0-slave: type=none
 
 ata1: enabled=true, ioaddr1=0x170, ioaddr2=0x370, irq=15
 ata1-master: type=none
-ata1-slave: type=none
+ata1-slave: type=disk, path="Builds/NULL.bin", mode=flat, translation=none
 
 ata2: enabled=false
 ata3: enabled=false

@@ -10,12 +10,53 @@ SOB.buffer                      equ SOB.currentlySelectedEntry+1 ; 8*1 bytes
     SOB.bufferEntry.segment     equ 6
 
 Print:
+    .updateVariables:
+        pusha
+        push ds
+
+        mov ax, Segments.Variables
+        mov ds, ax
+
+        mov eax, [ds:ScreenWidth]
+		mov ecx, [ds:ScreenHeight]
+        mul ecx
+
+        mov ds:[TotalPixels], eax ; precalculating total count of pixels
+
+        mov eax, [ds:ScreenWidth]
+		mov ecx, 10
+		xor edx, edx
+        div ecx
+
+        mov ds:[CharsPerLine], eax
+
+        mov eax, [ds:ScreenHeight]
+		mov ecx, 12
+		xor edx, edx
+        div ecx
+
+        mov ds:[LinesPerScreen], eax
+
+        mov eax, [ds:CharsPerLine]
+		mov ecx, [ds:LinesPerScreen]
+        mul ecx
+
+        mov ds:[TotalChars], eax ; precalculating total count of chars that can be on screen
+
+        pop ds
+        popa
+        ret
+
     .clearScreen:
         pusha
         push gs
+        push ds
 
-        mov ecx, 800*600
-        mov ax, 0x38
+        mov ax, Segments.Variables
+        mov ds, ax
+
+        mov ecx, ds:[TotalPixels]
+        mov ax, Segments.VRAM_Graphics
         mov gs, ax
         xor edi, edi
 
@@ -24,8 +65,17 @@ Print:
             add edi, 4
             loop .clearScreen.loop
 
-        mov ecx, 80*60*9/4
-        mov ax, 0xA0
+        push edx
+        mov ecx, ds:[TotalChars]
+        mov eax, 9 ; nine bytes per char
+        mul ecx
+        mov ecx, 4 ; writing dwords
+        xor edx, edx
+        div ecx
+        mov ecx, eax
+        pop edx
+
+        mov ax, Segments.CharmapOfScreen
         mov gs, ax
         xor edi, edi
 
@@ -35,53 +85,55 @@ Print:
             loop .clearScreen.loop2
 
 
-        mov ax, 0x10
+        mov ax, Segments.Variables
         mov gs, ax
         mov gs:[TMV.NextPlaceToPrintChar], dword 0
 
+        pop ds
         pop gs
         popa
         ret
 
-    .decCursorPos: ; eax - how much to decrease
-        push es
+    .charAtLocation:	;eax - foreground color dword, ebx - Character #, ecx - background color dword, edx - Character location
+        push ds
         push edx
+        push ecx
         push eax
-        mov ax, 0x10
-        mov es, ax
+
+        mov ax, Segments.CharmapOfScreen
+        mov ds, ax
+
+        xchg eax, edx
+
+        mov ecx, 9
+        mul ecx
+
+        xchg eax, edx
+
         pop eax
 
-        sub dword es:[TMV.NextPlaceToPrintChar], eax
+        mov ds:[edx], bl
+        pop ecx
+
+        mov ds:[edx+1], eax
+        mov ds:[edx+5], ecx
 
         pop edx
-        pop es
+        pop ds
         ret
 
-    .saveCurrentCursorPos:    ; edx - cursor position
+    .char:	;eax - foreground color dword, ebx - Character #, ecx - background color dword
         push es
         push edx
         push eax
-        mov ax, 0x10
-        mov es, ax
-        pop eax
-
-        mov es:[TMV.NextPlaceToPrintChar], edx
-
-        pop edx
-        pop es
-        ret
-
-    .print:    ; eax - Pixel color, ecx - background color dword, esi - String start address, edi - String length, ds - string segment
-        push es
-        push edx
-        push eax
-        mov ax, 0x10
+        mov ax, Segments.Variables
         mov es, ax
         pop eax
 
         mov edx, es:[TMV.NextPlaceToPrintChar]
 
-        call .string
+        call .charAtLocation
+        inc edx
 
         mov es:[TMV.NextPlaceToPrintChar], edx
 
@@ -89,7 +141,16 @@ Print:
         pop es
         ret
 
-    .string:    ; eax - Pixel color, ecx - background color dword, edx - First char printing location, esi - String start address, edi - String length, ds - string segment
+    .charSyscall: ;eax - foreground color dword, ecx - background color dword, esi - Character #
+        push ebx
+        mov ebx, esi
+
+        call .char
+
+        pop ebx
+        ret
+
+    .stringAtLocation:    ; eax - Pixel color, ecx - background color dword, edx - First char printing location, esi - String start address, edi - String length, ds - string segment
         push ebx
         push ecx
         dec edi
@@ -110,7 +171,7 @@ Print:
             add esp, 4
             pop ecx
             sub esp, 8
-            call .char
+            call .charAtLocation
             pop ecx
             inc edx
 
@@ -122,22 +183,48 @@ Print:
         pop ebx
         ret
 
-    .newLine:   ; edx - Char pos
+    .stringWithSize:    ; eax - Pixel color, ecx - background color dword, esi - String start address, edi - String length, ds - string segment
+        push es
+        push edx
+        push eax
+        mov ax, Segments.Variables
+        mov es, ax
+        pop eax
+
+        mov edx, es:[TMV.NextPlaceToPrintChar]
+
+        call .stringAtLocation
+
+        mov es:[TMV.NextPlaceToPrintChar], edx
+
+        pop edx
+        pop es
+        ret
+
+    .string:    ; eax - Pixel color, ecx - background color dword, esi - String start address, ds - string segment
+        push edi
+        push esi
+
+        movzx edi, byte [esi]
+        inc esi
+
+        call .stringWithSize
+
+        pop esi
+        pop edi
+        ret
+
+    .newLineFromLocation:   ; edx - Char pos
 		push eax
 		push ecx
 		;xchg bx, bx
 
 		push es
 
-		mov cx, 0x10
+		mov cx, Segments.Variables
 		mov es, cx
 
-		mov eax, [es:ScreenWidth]
-		mov ecx, 10
-		push edx
-		xor edx, edx
-        div ecx
-        pop edx
+		mov eax, [es:CharsPerLine]
 
         xchg eax, edx
 
@@ -151,7 +238,7 @@ Print:
         mul edx
         mov edx, eax
 
-        cmp edx, 80*50
+        cmp edx, [es:TotalChars]
         jl .newLine.end
 
         mov eax, [es:ScreenWidth]
@@ -174,26 +261,84 @@ Print:
 
 		ret
 
+    .newLine:
+        push es
+        push eax
+
+        mov ax, Segments.Variables
+        mov es, ax
+
+        pop eax
+
+        mov edx, es:[TMV.NextPlaceToPrintChar]
+
+        call .newLineFromLocation
+
+        mov es:[TMV.NextPlaceToPrintChar], edx
+
+        pop es
+        ret
+
+    .decCursorPos: ; eax - how much to decrease
+        push es
+        push edx
+        push eax
+        mov ax, Segments.Variables
+        mov es, ax
+        pop eax
+
+        sub dword es:[TMV.NextPlaceToPrintChar], eax
+
+        pop edx
+        pop es
+        ret
+
+    .resetCurrentCursorPos:
+        push edx
+        xor edx, edx
+        call .setCurrentCursorPos
+        pop edx
+        ret
+
+    .setCurrentCursorPos:    ; edx - cursor position
+        push es
+        push edx
+        push eax
+        mov ax, Segments.Variables
+        mov es, ax
+        pop eax
+
+        mov es:[TMV.NextPlaceToPrintChar], edx
+
+        pop edx
+        pop es
+        ret
+
     .scrollDown:
         pusha
 
 		push es
 
-		mov cx, 0x10
+		mov cx, Segments.Variables
 		mov es, cx
 
-        mov eax, [es:ScreenWidth]
-		mov ecx, 10
-		xor edx, edx
-        div ecx
+        mov eax, [es:CharsPerLine]
         mov ecx, 9
         mul ecx
 
         mov esi, eax
         xor edi, edi
-        mov ecx, 80*59*9/4
 
-        mov ax, 0xA0
+        mov ecx, es:[TotalChars]
+        sub ecx, es:[CharsPerLine]
+        mov eax, 9 ; nine bytes per char
+        mul ecx
+        mov ecx, 4 ; writing dwords
+        xor edx, edx
+        div ecx
+        mov ecx, eax
+
+        mov ax, Segments.CharmapOfScreen
 
         push ds
 
@@ -201,6 +346,22 @@ Print:
         mov es, ax
 
         rep movsd
+
+        push es
+
+		mov cx, Segments.Variables
+		mov es, cx
+        mov ecx, es:[CharsPerLine]
+
+        pop es
+
+        mov eax, 9
+        mul ecx
+
+        mov ecx, eax
+        xor eax, eax
+
+        rep stosb
 
         pop ds
         pop es
@@ -213,9 +374,12 @@ Print:
         push edi
         push gs
 
-        mov ecx, 80*60
+		mov cx, Segments.Variables
+		mov gs, cx
+
+        mov ecx, gs:[TotalChars]
         push eax
-        mov ax, 0xA0
+        mov ax, Segments.CharmapOfScreen
         mov gs, ax
         pop eax
         xor edi, edi
@@ -231,35 +395,34 @@ Print:
         pop ecx
         ret
 
-    .char:	;eax - foreground color dword, ebx - Character #, ecx - background color dword, edx - Character location
-        push ds
-        push edx
-        push ecx
-        push eax
+    .hex32_Syscall:             ; eax - color dword, edx - dword to print, ecx - bg color dword
+        mov ebx, edx
 
-        mov ax, 0xA0
-        mov ds, ax
+        call .hex32
 
-        xchg eax, edx
-
-        mov ecx, 9
-        mul ecx
-
-        xchg eax, edx
-
-        pop eax
-
-        mov ds:[edx], bl
-        pop ecx
-
-        mov ds:[edx+1], eax
-        mov ds:[edx+5], ecx
-
-        pop edx
-        pop ds
         ret
 
-    .hex32:   ; eax - color dword, ebx - bg color dword, ecx - dword to print, edx - location on screen
+    .hex32:             ; eax - color dword, ebx - dword to print, ecx - bg color dword
+        push es
+        push edx
+        push eax
+        mov ax, Segments.Variables
+        mov es, ax
+        pop eax
+
+        mov edx, es:[TMV.NextPlaceToPrintChar]
+
+        call .hex32AtLocation
+
+        mov es:[TMV.NextPlaceToPrintChar], edx
+
+        pop edx
+        pop es
+        ret
+
+    .hex32AtLocation:   ; eax - color dword, ebx - dword to print, ecx - bg color dword, edx - location on screen
+        xchg ebx, ecx
+
         push ebp
         push ebx
         mov ebp, esp
@@ -274,7 +437,7 @@ Print:
         xchg ecx, edx ; edx
         push ecx
         mov ecx, [ss:ebp]
-        call .char
+        call .charAtLocation
         pop ecx
         inc edx
         xchg ecx, edx ; ecx
@@ -289,7 +452,7 @@ Print:
         push ecx
         xor ecx, ecx
         mov ecx, [ss:ebp]
-        call .char
+        call .charAtLocation
         pop ecx
         inc edx
         xchg ecx, edx ; ecx
@@ -304,7 +467,7 @@ Print:
         push ecx
         xor ecx, ecx
         mov ecx, [ss:ebp]
-        call .char
+        call .charAtLocation
         pop ecx
         inc edx
         xchg ecx, edx ; ecx
@@ -319,7 +482,7 @@ Print:
         push ecx
         xor ecx, ecx
         mov ecx, [ss:ebp]
-        call .char
+        call .charAtLocation
         pop ecx
         inc edx
         xchg ecx, edx ; ecx
@@ -335,7 +498,7 @@ Print:
         push ecx
         xor ecx, ecx
         mov ecx, [ss:ebp]
-        call .char
+        call .charAtLocation
         pop ecx
         inc edx
         xchg ecx, edx ; ecx
@@ -350,7 +513,7 @@ Print:
         push ecx
         xor ecx, ecx
         mov ecx, [ss:ebp]
-        call .char
+        call .charAtLocation
         pop ecx
         inc edx
         xchg ecx, edx ; ecx
@@ -365,7 +528,7 @@ Print:
         push ecx
         xor ecx, ecx
         mov ecx, [ss:ebp]
-        call .char
+        call .charAtLocation
         pop ecx
         inc edx
         xchg ecx, edx ; ecx
@@ -379,12 +542,61 @@ Print:
         push ecx
         xor ecx, ecx
         mov ecx, [ss:ebp]
-        call .char
+        call .charAtLocation
         pop ecx
         inc edx
 
         pop ebx
         pop ebp
+        xchg ebx, ecx
+        ret
+
+    .addFramebuffer: ; ecx - PID, si - new framebuffer segment
+        push eax
+        push es
+
+        mov ax, Segments.Variables
+        mov es, ax
+
+        xor eax, eax
+        mov al, byte es:[SOB.currentlySelectedEntry]
+        inc byte es:[SOB.currentlySelectedEntry]
+        shl al, 2
+        mov word es:[SOB.buffer+eax+SOB.bufferEntry.flags], 1b   ; setting flags
+        mov es:[SOB.buffer+eax+SOB.bufferEntry.PID], ecx         ; setting PID
+        mov es:[SOB.buffer+eax+SOB.bufferEntry.segment], si      ; setting segment
+
+        pop es
+        pop eax
+
+        ret
+
+    .delFramebuffer: ; ecx - PID
+        push eax
+        push es
+
+        mov ax, Segments.Variables
+        mov es, ax
+
+        xor eax, eax
+        mov al, byte es:[SOB.currentlySelectedEntry]
+        dec eax
+        shl eax, 2
+
+        cmp dword es:[SOB.buffer+eax+SOB.bufferEntry.PID], ecx ; checking if the framebuffer was created for this process
+        stc
+        jne .delFramebuffer.end
+
+        dec byte es:[SOB.currentlySelectedEntry]
+        mov word es:[SOB.buffer+eax+SOB.bufferEntry.flags], 0   ; clearing flags
+        mov dword es:[SOB.buffer+eax+SOB.bufferEntry.PID], 0    ; clearing PID
+        mov word es:[SOB.buffer+eax+SOB.bufferEntry.segment], 0 ; clearing segment
+
+        clc
+        .delFramebuffer.end:
+        pop es
+        pop eax
+
         ret
 
     .refresh:
@@ -393,7 +605,7 @@ Print:
         push es
         push fs
 
-        mov ax, 0x10
+        mov ax, Segments.Variables
         mov fs, ax
 
         cmp bx, 0xFFFF
@@ -410,14 +622,12 @@ Print:
         mov ds, fs:[SOB.buffer+ecx+SOB.bufferEntry.segment]
         ;mov cx, fs:[SOB.buffer+ecx]
 
-        mov ax, 0x38
+        mov ax, Segments.VRAM_Graphics
         mov es, ax
 
         xor edi, edi
         xor esi, esi
-        mov eax, fs:[ScreenWidth]
-        mul dword fs:[ScreenHeight]
-        mov ecx, eax
+        mov ecx, fs:[TotalPixels]
 
         rep movsd
 
@@ -427,30 +637,24 @@ Print:
 
         push gs
 
-        mov ax, 0xA0
+        mov ax, Segments.CharmapOfScreen
         mov ds, ax
 
-        mov ax, 0x28
+        mov ax, Segments.KernelCode
         mov es, ax
 
-        mov ax, 0x38
+        mov ax, Segments.VRAM_Graphics
         mov gs, ax
 
         xor esi, esi
         xor edi, edi
 
-        xor edx, edx
-        mov eax, fs:[ScreenHeight]
-        mov ecx, 12
-        div ecx
+        mov eax, fs:[LinesPerScreen]
 
         push eax
 
         .refresh.textMode.newLine:
-            xor edx, edx
-            mov eax, fs:[ScreenWidth]
-            mov ecx, 10
-            div ecx
+            mov eax, fs:[CharsPerLine]
 
             push eax
 
@@ -618,90 +822,6 @@ Print:
 
                 jmp .refresh.textMode.newLine.newChar.0.1
 
-    .charSyscall: ;eax - foreground color dword, ecx - background color dword, esi - Character #
-        push ebx
-        push es
-        mov bx, 0x10
-        mov es, bx
-        mov edx, es:[TMV.NextPlaceToPrintChar]
-
-        mov ebx, esi
-
-        call .char
-
-        inc edx
-        mov es:[TMV.NextPlaceToPrintChar], edx
-
-        pop es
-        pop ebx
-        ret
-
-    .newLineSyscall:
-        push es
-        push eax
-
-        mov ax, 0x10
-        mov es, ax
-
-        pop eax
-
-        mov edx, es:[TMV.NextPlaceToPrintChar]
-
-        call .newLine
-
-        mov es:[TMV.NextPlaceToPrintChar], edx
-
-        pop es
-        ret
-
-    .addFramebuffer: ; ecx - PID, si - new framebuffer segment
-        push eax
-        push es
-
-        mov ax, 0x10
-        mov es, ax
-
-        xor eax, eax
-        mov al, byte es:[SOB.currentlySelectedEntry]
-        inc byte es:[SOB.currentlySelectedEntry]
-        shl al, 2
-        mov word es:[SOB.buffer+eax+SOB.bufferEntry.flags], 1b   ; setting flags
-        mov es:[SOB.buffer+eax+SOB.bufferEntry.PID], ecx         ; setting PID
-        mov es:[SOB.buffer+eax+SOB.bufferEntry.segment], si      ; setting segment
-
-        pop es
-        pop eax
-
-        ret
-
-    .delFramebuffer: ; ecx - PID
-        push eax
-        push es
-
-        mov ax, 0x10
-        mov es, ax
-
-        xor eax, eax
-        mov al, byte es:[SOB.currentlySelectedEntry]
-        dec eax
-        shl eax, 2
-
-        cmp dword es:[SOB.buffer+eax+SOB.bufferEntry.PID], ecx ; checking if the framebuffer was created for this process
-        stc
-        jne .delFramebuffer.end
-
-        dec byte es:[SOB.currentlySelectedEntry]
-        mov word es:[SOB.buffer+eax+SOB.bufferEntry.flags], 0   ; clearing flags
-        mov dword es:[SOB.buffer+eax+SOB.bufferEntry.PID], 0    ; clearing PID
-        mov word es:[SOB.buffer+eax+SOB.bufferEntry.segment], 0 ; clearing segment
-
-        clc
-        .delFramebuffer.end:
-        pop es
-        pop eax
-
-        ret
-
 Draw:
     .rectangle: ; eax - colour dword, bx - x1, ebx>>16 - y1, cx - x2, ecx>>16 - y2
         push edi
@@ -710,7 +830,7 @@ Draw:
         push es
 
         push eax
-        mov ax, 0x10
+        mov ax, Segments.Variables
         mov es, ax
 
         xor edx, edx
@@ -745,7 +865,7 @@ Draw:
         add ecx, edx
         shl ecx, 2
 
-        mov ax, 0x38
+        mov ax, Segments.VRAM_Graphics
         mov es, ax
 
         pop eax
@@ -777,7 +897,7 @@ Draw:
         push ecx
 
         push eax
-        mov ax, 0x10
+        mov ax, Segments.Variables
         mov fs, ax
 
         mov ax, 0x28

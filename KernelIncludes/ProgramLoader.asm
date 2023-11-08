@@ -19,7 +19,7 @@ ProgramLoader:
         push esi
         push eax
 
-        mov ax, 0x70
+        mov ax, Segments.UserspaceMem
         mov ds, ax
         mov eax, ecx
         push ecx
@@ -32,7 +32,7 @@ ProgramLoader:
         pop ecx
         ;xor edx, edx
 
-        call MemoryManager.createLDTEntry
+        call LDT.createEntry
 
 		pop eax
         mov fs, si
@@ -45,7 +45,7 @@ ProgramLoader:
         push ebx
 
         push es
-        mov ax, 0x8
+        mov ax, Segments.KernelStack
         mov es, ax
         xor edi, edi
 
@@ -83,7 +83,7 @@ ProgramLoader:
         push ebx
         push edx
 
-        mov ax, 0x70
+        mov ax, Segments.UserspaceMem
         mov ds, ax
         mov eax, ecx
         push ecx
@@ -95,7 +95,7 @@ ProgramLoader:
         pop ecx
         xor edx, edx
 
-        call MemoryManager.createLDTEntry ; Creating SS0
+        call LDT.createEntry ; Creating SS0
 
         or esi, 4+0
         mov edi, esi
@@ -111,14 +111,14 @@ ProgramLoader:
         ;xor edx, edx
         pop edx
 
-        call MemoryManager.createLDTEntry ; Creating SS
+        call LDT.createEntry ; Creating SS
 
         push fs
 
         mov ax, 0x0
         mov fs, ax
 
-        call ProcessManager.setLDT
+        call LDT.set
 
         mov ax, 0+4+0
         mov ds, ax
@@ -145,24 +145,24 @@ ProgramLoader:
         jz .exec.continue
 
         push ds
-        mov ax, 0x70
+        mov ax, Segments.UserspaceMem
         mov ds, ax
 
         push edx
         mov eax, ecx
         push ecx
-        mov ecx, 469 ; 800*600*4/0x1000 rounded up
+        mov ecx, (SCREEN_WIDTH*SCREEN_HEIGHT*4/0x1000)+1
 
         call MemoryManager.memAlloc
 
         mov ecx, ebx
-        mov ebx, 0x1000*469-1
+        mov ebx, SCREEN_WIDTH*SCREEN_HEIGHT*4-1
         ;xor edx, edx
         pop ecx
         pop edx
 
         push esi
-        call MemoryManager.createLDTEntry ; Creating GS
+        call LDT.createEntry ; Creating GS
 
         call Print.addFramebuffer
 
@@ -172,10 +172,14 @@ ProgramLoader:
         or si, 11b
         mov es:[0x5C], si
 
-        mov es, si
-        xor eax, eax
-        mov ecx, 800*600
+        mov ax, Segments.Variables
+        mov es, ax
 
+        xor eax, eax
+        mov ecx, es:[TotalPixels]
+        shr ecx, 2
+
+        mov es, si
         rep stosd
 
         pop esi
@@ -187,14 +191,14 @@ ProgramLoader:
         .exec.continue:
 
         call ProcessManager.getCurrentPID
-        call ProcessManager.setLDT
+        call LDT.set
         pop ecx
 
         pop es
 
         pop fs
 
-        mov bx, 0x70
+        mov bx, Segments.UserspaceMem
         mov ds, bx
 
         shl ecx, 3+4+4

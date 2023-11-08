@@ -8,6 +8,14 @@ INFO:
 
 times 512-($-$$) db 0
 
+Vars.flags equ 0
+Vars.historyLength equ 1
+Vars.historyRead equ 2
+Vars.textLength equ 3
+Vars.text equ 4
+
+MAX_TEXT_LEN equ 50
+
 Terminal:
     mov ecx, 1
     mov ebx, 0x30
@@ -27,10 +35,7 @@ Terminal:
     xor eax, eax
     not eax
 
-    mov esi, StartupText+1
-    xor ecx, ecx
-    mov cl, [esi-1]
-    mov edi, ecx
+    mov esi, StartupText
 
     xor ebx, ebx
     xor ecx, ecx
@@ -41,20 +46,19 @@ Terminal:
     int 0x30
 
     .prompt:
+        mov byte fs:[Vars.historyRead], 0
+
         xor eax, eax
         not eax
 
-        mov esi, Prompt+1
-        xor ecx, ecx
-        mov cl, [esi-1]
-        mov edi, ecx
+        mov esi, Prompt
 
         xor ebx, ebx
         xor ecx, ecx
 
         int 0x30
         mov edi, 0
-        mov byte fs:[3], '/'
+        ;mov byte fs:[Vars.text], '/'
 
     .loop:
         mov ebx, 0x20
@@ -68,7 +72,13 @@ Terminal:
         cmp eax, 0xF0
         je .release
 
-        test byte fs:[0], 00000001b
+        cmp eax, 0x63
+        je .upHistory
+
+        cmp eax, 0x60
+        je .downHistory
+
+        test byte fs:[Vars.flags], 00000001b
         jz .loop.skipAdd
 
         add eax, 0xFF ; lookup in the second table
@@ -81,7 +91,7 @@ Terminal:
         je .shift
 
         cmp eax, 0x8
-        je .deleteChar
+        je .delete
 
         cmp eax, 0x4
         je .enter
@@ -90,9 +100,12 @@ Terminal:
         jz .loop
 
         xor esi, esi
-        mov si, fs:[1]
-        inc word fs:[1]
-        mov fs:[esi+4], al
+        movzx si, byte fs:[Vars.textLength]
+        cmp si, MAX_TEXT_LEN
+        jge .loop
+
+        inc byte fs:[Vars.textLength]
+        mov fs:[esi+Vars.text], al
 
         mov esi, eax
         mov eax, 0x00FFFFFF
@@ -106,8 +119,114 @@ Terminal:
 
         jmp .loop
 
+    .downHistory:
+        cmp byte fs:[Vars.historyRead], 0
+        jz .loop
+
+        call .clear
+
+        movzx eax, byte fs:[Vars.historyLength]
+        movzx ebx, byte fs:[Vars.historyRead]
+        cmp eax, ebx
+        jz .downHistory.overflow
+
+        inc byte fs:[Vars.historyRead]
+
+        jmp .downHistory.done
+
+        .downHistory.overflow:
+
+        mov byte fs:[Vars.historyRead], 0
+
+        .downHistory.done:
+
+        call .drawSelected
+
+        push esi
+        call .getCurrentTextField
+        movzx edi, byte fs:[esi+Vars.textLength]
+        pop esi
+
+        jmp .loop
+
+    .upHistory:
+        cmp byte fs:[Vars.historyLength], 0
+        jz .loop
+
+        cmp byte fs:[Vars.historyRead], 1
+        je .loop
+        call .clear
+
+        cmp byte fs:[Vars.historyRead], 0
+        jnz .upHistory.not_underflow
+
+        mov bl, byte fs:[Vars.historyLength]
+        mov byte fs:[Vars.historyRead], bl
+
+        jmp .upHistory.draw
+
+        .upHistory.not_underflow:
+        dec byte fs:[Vars.historyRead]
+
+        .upHistory.draw:
+
+        call .drawSelected
+
+        push esi
+        call .getCurrentTextField
+        movzx edi, byte fs:[esi+Vars.textLength]
+        pop esi
+
+        jmp .loop
+
+    .drawSelected:
+        call .getCurrentTextField
+
+        add esi, Vars.textLength
+        movzx ecx, byte fs:[esi]
+        xor eax, eax
+
+        cmp ecx, 0
+        jnz .drawSelected.loop
+
+        ret
+
+        .drawSelected.loop:
+            inc eax
+            pusha
+
+            movzx esi, byte fs:[esi+eax]
+            mov eax, 0x00FFFFFF
+            mov ebx, 0x2
+            xor ecx, ecx
+
+            int 0x30
+
+            popa
+
+            cmp eax, ecx
+            jl .drawSelected.loop
+
+        ret
+
+    .clear:
+        call .getCurrentTextField
+
+        movzx ecx, byte fs:[esi+Vars.textLength]
+
+        cmp ecx, 0
+        jz .clear.loop.done
+
+        .clear.loop:
+            call .deleteChar
+
+            loop .clear.loop
+
+        .clear.loop.done:
+        ret
+
     .shift:
-        or byte fs:[0], 00000001b
+        or byte fs:[Vars.flags], 00000001b
 
         jmp .loop
 
@@ -127,22 +246,34 @@ Terminal:
         jmp .loop
 
     .unshift:
-        and byte fs:[0], 11111110b
+        and byte fs:[Vars.flags], 11111110b
+
+        jmp .loop
+
+    .delete:
+        cmp edi, 0
+        jz .loop
+
+        dec edi
+
+        call .getCurrentTextField
+
+        dec byte fs:[esi+Vars.textLength]
+        push edi
+        movzx edi, byte fs:[esi+Vars.textLength]
+        add esi, edi
+        pop edi
+        mov byte fs:[esi+Vars.text], 0
+
+        call .deleteChar
 
         jmp .loop
 
     .deleteChar:
-        cmp edi, 0
-        jz .loop
-        dec edi
+        pusha
         mov ebx, 4
         mov eax, 1
         int 0x30
-
-        xor esi, esi
-        dec word fs:[1]
-        mov si, fs:[1]
-        mov byte fs:[esi+4], 0
 
         xor esi, esi
         mov eax, 0x00FFFFFF
@@ -155,7 +286,23 @@ Terminal:
         mov eax, 1
         int 0x30
 
-        jmp .loop
+        popa
+
+        ret
+
+    .getCurrentTextField:
+        push eax
+        movzx esi, byte fs:[Vars.historyRead]
+        mov eax, MAX_TEXT_LEN+1
+
+        push edx
+        mul esi
+        pop edx
+
+        mov esi, eax
+
+        pop eax
+        ret
 
     .enter:
         mov ebx, 0x3
@@ -165,14 +312,14 @@ Terminal:
         mov si, fs
         mov ds, si
 
-        mov esi, 3
-        cmp word ds:[1], 0
-        jz .enter.cleanup
-
+        call .getCurrentTextField
+        add esi, Vars.textLength
+        cmp byte ds:[esi], 0
+        jz .enter.cleanup.2
         inc esi
+
         call .checkCommands
         jz .enter.cleanup
-        dec esi
 
         mov ebx, 0x21
         int 0x30 ; attempt to run program
@@ -184,10 +331,7 @@ Terminal:
         xor eax, eax
         not eax
 
-        mov esi, FileNotFound+1
-        xor ecx, ecx
-        mov cl, [esi-1]
-        mov edi, ecx
+        mov esi, FileNotFound
 
         xor ebx, ebx
         xor ecx, ecx
@@ -202,9 +346,33 @@ Terminal:
         mov ds, si
 
         .enter.cleanup:
-            xor edi, edi
-            inc edi
-            mov ecx, 0xffe
+            push es
+            mov si, fs
+            mov es, si
+
+            inc byte fs:[Vars.historyLength]
+            movzx edi, byte fs:[Vars.historyLength]
+            mov eax, MAX_TEXT_LEN+1
+
+            push edx
+            mul edi
+            pop edx
+            mov edi, eax
+            add edi, Vars.textLength
+
+            call .getCurrentTextField
+            add esi, Vars.textLength
+            movzx ecx, byte fs:[esi]
+            inc ecx
+
+            rep movsb
+
+            pop es
+
+            .enter.cleanup.2:
+
+            mov edi, Vars.textLength
+            mov ecx, MAX_TEXT_LEN+1
             xor eax, eax
 
             push es
@@ -265,7 +433,7 @@ CompareString: ; ds:esi - string 1 address, es:edi - string 2 address. Output: Z
 
         ret
 
-StartupText: db .end-StartupText-1, "FlameShell v1.0 started."
+StartupText: db .end-StartupText-1, "FlameShell v1.1 started."
     .end:
 
 Prompt: db .end-Prompt-1, "FlameShell | "

@@ -5,9 +5,9 @@ EDDV3Read:
 	push ds
 	push es
 
-	mov ax, 0x08
+	mov ax, Segments.KernelStack
 	mov ds, ax
-	mov ax, 0x10
+	mov ax, Segments.Variables
 	mov es, ax
 
 	mov ax, ds:[0x1E]
@@ -37,14 +37,46 @@ EDDV3Read:
 	jmp $
 
 	.PCI:
-		jmp $
+		mov eax, ds:[0x30]
+
+		xor edx, edx
+
+		mov dl, al
+		shl edx, 16
+		shr eax, 8
+		mov dh, al
+		shr dx, 3
+		mov dh, ah
+		shl dx, 3
+
+		mov eax, edx
+		mov ebx, 0x4
+
+		call PCIDriver.deviceInfoByLocation
+		jc .noEDD
+
+		cmp eax, 0
+		jnz .PCI.API.notStandard
+
+		mov eax, ATA1
+
+		.PCI.API.notStandard:
+
+		cmp es:[ABAddr1], ax
+		jne .noEDD
+
+
+		mov eax, ds:[0x38]
+		and eax, 0x1
+		mov word es:[EDD_DetectedDiskNumber], ax
+
+		jmp .end
 
 	.notSupported.USB:
-		mov si, 0x28
+		mov si, Segments.KernelCode
         mov ds, si
         mov eax, 0x00FFFFFF
-        mov esi, .USBMessage+1
-        movzx di, byte [.USBMessage]
+        mov esi, .USBMessage
         xor ecx, ecx
 
         call Print.string
@@ -52,11 +84,10 @@ EDDV3Read:
         jmp $
 
 	.notSupported.SCSI:
-		mov si, 0x28
+		mov si, Segments.KernelCode
         mov ds, si
         mov eax, 0x00FFFFFF
-        mov esi, .SCSIMessage+1
-        movzx di, byte [.SCSIMessage]
+        mov esi, .SCSIMessage
         xor ecx, ecx
 
         call Print.string
@@ -65,11 +96,10 @@ EDDV3Read:
 
 
 	.notSupported.FireWire:
-		mov si, 0x28
+		mov si, Segments.KernelCode
         mov ds, si
         mov eax, 0x00FFFFFF
-        mov esi, .FireWireMessage+1
-        movzx di, byte [.FireWireMessage]
+        mov esi, .FireWireMessage
         xor ecx, ecx
 
         call Print.string
@@ -77,11 +107,10 @@ EDDV3Read:
         jmp $
 
 	.notSupported.Fibre:
-		mov si, 0x28
+		mov si, Segments.KernelCode
         mov ds, si
         mov eax, 0x00FFFFFF
-        mov esi, .FibreMessage+1
-        movzx di, byte [.FibreMessage]
+        mov esi, .FibreMessage
         xor ecx, ecx
 
         call Print.string
@@ -89,11 +118,10 @@ EDDV3Read:
         jmp $
 
 	.notSupported.ATAPI:
-		mov si, 0x28
+		mov si, Segments.KernelCode
         mov ds, si
         mov eax, 0x00FFFFFF
-        mov esi, .ATAPIMessage+1
-        movzx di, byte [.ATAPIMessage]
+        mov esi, .ATAPIMessage
         xor ecx, ecx
 
         call Print.string
@@ -192,11 +220,11 @@ EDDV3Read:
 
 	section .rodata
 
-	.ATAPIMessage:    db .FibreMessage-.ATAPIMessage,    "Boot from ATAPI (CDROM) detected. It is currently unsupported. Halting."
-	.FibreMessage:    db .FireWireMessage-.FibreMessage, "Boot from Fibre channel detected. It is currently unsupported. Halting."
-	.FireWireMessage: db .SCSIMessage-.FireWireMessage,  "Boot from FireWire detected. It is currently unsupported. Halting."
-	.SCSIMessage:     db .USBMessage-.SCSIMessage,       "Boot from SCSI detected. It is currently unsupported. Halting."
-	.USBMessage:      db .endStr-.USBMessage,               "Boot from USB detected. It is currently unsupported. Halting."
+	.ATAPIMessage:    db .FibreMessage-.ATAPIMessage,    "Boot from ATAPI (CDROM) detected. It is currently unsupported. Halting.", 10
+	.FibreMessage:    db .FireWireMessage-.FibreMessage, "Boot from Fibre channel detected. It is currently unsupported. Halting.", 10
+	.FireWireMessage: db .SCSIMessage-.FireWireMessage,  "Boot from FireWire detected. It is currently unsupported. Halting.", 10
+	.SCSIMessage:     db .USBMessage-.SCSIMessage,       "Boot from SCSI detected. It is currently unsupported. Halting.", 10
+	.USBMessage:      db .endStr-.USBMessage,            "Boot from USB detected. It is currently unsupported. Halting.", 10
 	.endStr:
 
 	section .text

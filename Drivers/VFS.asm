@@ -4,11 +4,18 @@ VFS:
         pusha
         push es
         push fs
+        push ds
 
-        mov ax, 0x90
-        mov es, ax
+        mov ax, Segments.Variables
+        mov ds, ax
 
-        mov ax, 0x88
+        mov ecx, 1
+        xor edx, edx
+        call API.alloc
+        mov [ds:AllocSegments.VFS_Data], si
+        mov es, si
+
+        mov ax, Segments.FS_Header
         mov fs, ax
 
         xor eax, eax
@@ -23,6 +30,7 @@ VFS:
 
 		mov byte es:[5], '/'         ; mount point (string, 26 byte max length)
 
+		pop ds
 		pop fs
         pop es
         popa
@@ -95,7 +103,7 @@ VFS:
 
         call FlFS.getFileNumber
 
-        call ProcessManager.setLDT
+        call LDT.set
         mov ecx, edx
 
         jc .error1
@@ -119,7 +127,7 @@ VFS:
         call FlFS.readFile
 
         call ProcessManager.getCurrentPID
-        call ProcessManager.setLDT
+        call LDT.set
 
         pop ds
 
@@ -159,6 +167,20 @@ VFS:
         popa
         ret
 
+        .error1:
+            popa
+        .error1.postpop:
+            stc
+            mov ebx, 0x00000001 ; Impossible path
+            ret
+
+        .error2:
+            popa
+        .error2.postpop:
+            stc
+            mov ebx, 0x00000002 ; Not permitted to access
+            ret
+
         .mountCheck: ; ds:esi - file path. Output: ecx - mounted disk, esi - path from mountpoint.
             push edx
             push eax
@@ -166,7 +188,12 @@ VFS:
             push edi
             push fs
 
-            mov cx, 0x90
+            SWITCH_TO_SYSTEM_LDT cx
+
+            mov cx, Segments.Variables
+            mov fs, cx
+
+            mov cx, [fs:AllocSegments.VFS_Data]
             mov fs, cx
 
             xor ecx, ecx
@@ -195,6 +222,8 @@ VFS:
                 cmp edi, 0xfdf
                 jle .mountCheck.loop
 
+           SWITCH_BACK_TO_PROCESS_LDT cx
+
             mov ecx, eax
             add esi, ebx
 
@@ -203,18 +232,4 @@ VFS:
             pop ebx
             pop eax
             pop edx
-            ret
-
-        .error1:
-            popa
-        .error1.postpop:
-            stc
-            mov ebx, 0x00000001 ; Impossible path
-            ret
-
-        .error2:
-            popa
-        .error2.postpop:
-            stc
-            mov ebx, 0x00000002 ; Not permitted to access
             ret
