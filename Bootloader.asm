@@ -161,7 +161,7 @@ diskLoad:
 	        .read2:
 
 	        mov ah, 0x42
-			mov dword ds:[si], 0x002A0010
+			mov dword ds:[si], 0x003A0010
 			xor ecx, ecx
 			mov	word ds:[si+4], cx
 			mov word ds:[si+6], 0x2000

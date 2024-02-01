@@ -265,6 +265,7 @@ ProcessManager:
         .stopProcess.notStarted:
             stc
             pop es
+            pop edi
             pop ebx
             ret
 

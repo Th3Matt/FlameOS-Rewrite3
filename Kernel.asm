@@ -36,6 +36,9 @@ GraphicsModeSetUp:
 
 	call Print.updateVariables
 
+	mov esi, Prefix.kernel
+	call CurrentContext.addNew
+
 ClearScreen:
 
 	call Print.clearScreen
@@ -44,72 +47,76 @@ KERNEL:
 	.loading:
 		mov es:[SOB.currentlySelectedEntry], byte 0
 
-        call Print.resetCurrentCursorPos
+    call Print.resetCurrentCursorPos
 
 		mov eax, 0xFFFFFFFF
 		mov esi, StartupText
 		xor ecx, ecx
 
-		call Print.string
+		call Print.prefixedString
+
+		mov esi, VideoDriver
+
+		call Print.prefixedString
 
 		pusha
 
-        mov al, (0<<6) + (11b<<4) + (2<<1) + 0
-        out 0x43, al
-        mov al, 2Eh
-        out 0x40, al
-        mov al, 9Ch
-        out 0x40, al
+    mov al, (0<<6) + (11b<<4) + (2<<1) + 0
+    out 0x43, al
+    mov al, 2Eh
+    out 0x40, al
+    mov al, 9Ch
+    out 0x40, al ; ~ 0.019991s
 
 		.setPIC:
-        	mov al, 0x11
-        	out 0x20, al
+      mov al, 0x11
+    	out 0x20, al
         
-        	mov al, 0x11
-        	out 0xA0, al
+      mov al, 0x11
+    	out 0xA0, al
         	
-        	mov al, 0x20
-        	out 0x21, al
+      mov al, 0x20
+      out 0x21, al
         	
-        	mov al, 0x28
-        	out 0xA1, al
+      mov al, 0x28
+      out 0xA1, al
         	
-        	mov al, 0x04
-        	out 0x21, al
+      mov al, 0x04
+      out 0x21, al
         	
-        	mov al, 0x02
-        	out 0xA1, al
+      mov al, 0x02
+      out 0xA1, al
         	
-        	mov al, 0x01
-        	out 0x21, al
+      mov al, 0x01
+      out 0x21, al
         	
-        	mov al, 0x01
-        	out 0xA1, al
+      mov al, 0x01
+      out 0xA1, al
         
-        	mov al, 0x00
-        	out 0x21, al
+      mov al, 0x00
+      out 0x21, al
         
-        	mov al, 0x00
-        	out 0xA1, al
+      mov al, 0x00
+      out 0xA1, al
         
-   		 	mov al, 11111110b
-    		out 0x21, al
+   		mov al, 11111110b
+    	out 0x21, al
     		
-    		mov al, 11111111b
-    		out 0xA1, al
+    	mov al, 11111111b
+  		out 0xA1, al
 
-    	call SetUpInterrupts
-    	sti
+    call SetUpInterrupts
+    sti
 
-    	popa
+    popa
 
 		mov esi, IDTloaded
 
 		xor ecx, ecx
 
-		call Print.string
+		call Print.prefixedString
 
-    	call Print.newLine
+    call Print.newLine
 
 ; ----------------------------------------------------------------------------------------------
 ;									Interrupts initialised
@@ -118,38 +125,66 @@ KERNEL:
 		call ProcessManager.init
 		xor eax, eax
 		xor ecx, ecx
-        call ProcessManager.pauseProcess
+    call ProcessManager.pauseProcess
 
-        call MemoryManager.init
+    call MemoryManager.init
 
 ; ----------------------------------------------------------------------------------------------
 ;									Memory manager initialised
 ; ----------------------------------------------------------------------------------------------
 
-        call DeviceList.init
+    call DeviceList.init
 
-        call Syscall.init
-        call GenericDrivers.init
+    call Syscall.init
+    call GenericDrivers.init
 
-        call PS2.init
-        call PS2.initDevices
+    call PS2.init
+    call PS2.initDevices
 
-        call PS_2_Keyboard.init
+    call PS_2_Keyboard.init
 
-        mov ax, Segments.TSS2
-        ltr ax
+    mov ax, Segments.TSS2
+    ltr ax
 
-        call PCIDriver.detectDevices
+    call PCIDriver.detectDevices
 
 ; ----------------------------------------------------------------------------------------------
 ;								PCI and some devices initialised
 ; ----------------------------------------------------------------------------------------------
 
-        test byte es:[CustomSetting], 100b
-        jnz PCITest
+    test byte es:[CustomSetting], 100b
+    jnz PCITest
 
 		call S_ATA_PI.detectDevices
-		call AHCIDriver.initController
+		call AHCIDriver.init
+
+    mov ecx, 1
+    xor edx, edx
+
+    call API.allocWithAddress
+
+    mov fs, si
+
+    mov eax, 0
+    xor ebx, ebx
+    mov ecx, 2
+    xor edi, edi 
+    
+    call AHCIDriver.readSectors
+
+    jc .readSectors
+    
+    pusha 
+   
+    mov ebx, 0x00FA1100
+    mov eax, 0x00FF8800
+    xor ecx, ecx
+
+    call Print.hex32 
+  
+    popa
+  
+    .readSectors:
 
 ; ----------------------------------------------------------------------------------------------
 ;									Disk drivers initialised
@@ -157,83 +192,96 @@ KERNEL:
 
 		call EDDV3Read
 
-		call Print.newLine
+    mov cx, Segments.SysLDT
+    lldt cx
+    call FlFS.init
 
-        mov cx, Segments.SysLDT
-        lldt cx
-        call FlFS.init
-
-        call VFS.init
+    call VFS.init
 
 ; ----------------------------------------------------------------------------------------------
 ;								VFS and filesystem initialised
 ; ----------------------------------------------------------------------------------------------
 
-        mov ax, Segments.FS_Header
-        mov fs, ax
-        mov esi, Strings.Terminal
-        call FlFS.getFileNumber
-        jnc .terminalFileFound
-        call NoTerminalFile
-        .terminalFileFound:
-        cmp al, fs:[4]
-        jz .terminalFileAutorun
-		call DifferentAutorunFile
-		.terminalFileAutorun:
+    mov ax, Segments.FS_Header
+    mov fs, ax
+    mov esi, Strings.Terminal
+    
+    call FlFS.getFileNumber
+    jnc .terminalFileFound
+      
+      call NoTerminalFile
+    
+    .terminalFileFound:
+      cmp al, fs:[4]
+      jz .terminalFileAutorun
+        
+        call DifferentAutorunFile
+		
+      .terminalFileAutorun:
 
 		mov al, fs:[4]
 		cmp al, 0
 		jz .NoAutorunFile
 
-        push edx
+    push edx
 
-        call FlFS.getFileInfo
-        push eax
+    call FlFS.getFileInfo
+    push eax
 
-        push ds
-        mov ax, Segments.UserspaceMem
-        mov ds, ax
-        xor eax, eax
-        mov ecx, ebx
+    push ds
+    mov ax, Segments.UserspaceMem
+    mov ds, ax
+    xor eax, eax
+    mov ecx, ebx
 
-        call MemoryManager.memAlloc
+    call MemoryManager.memAlloc
 
-        push eax ; saving allocation address
-        xor eax, eax
+    push eax ; saving allocation address
+    xor eax, eax
 
-        call ProcessManager.startProcess
+    call ProcessManager.startProcess
 
-        shl ebx, 4+4+3
-        pop eax
-        add ebx, eax
-        dec ebx
-        mov edx, 3
+    shl ebx, 4+4+3
+    pop eax
+    add ebx, eax
+    dec ebx
+    mov edx, 3
 
-        call LDT.createEntry
+    call LDT.createEntry
 
-        pop ds
+    pop ds
 		pop eax
 
-        call LDT.set
+    call LDT.set
 
-        mov ds, si
-        xor edi, edi
-        call FlFS.readFile
+    push ds
 
-        xor eax, eax
+    mov ds, si
+    xor edi, edi
+    call FlFS.readFile
+
+    xor eax, eax
 		mov ebx, ecx
 		mov edx, 3
-        call ProgramLoader.exec
+    call ProgramLoader.exec
 
-        ;ud1
-        hlt
-        cli
+    ;ud1
+    hlt
+    cli
 
-        pop edx
+    pop ds
 
-        call SetUpSheduler
+    pop edx
 
-        call Print.newLine
+    call SetUpSheduler
+
+    mov eax, 0x00FFFFFF
+    mov esi, InitDone
+    xor ecx, ecx
+
+    call Print.prefixedString
+
+    call Print.newLine
 
 		sti
 		hlt
@@ -246,7 +294,7 @@ KERNEL:
 		xor ecx, ecx
 		mov esi, NoAutorunFile
 
-		call Print.string
+		call Print.prefixedString
 
 		hlt
 		jmp $-1
@@ -265,17 +313,11 @@ NoTerminalFile:
 
 	call Print.newLine
 
-	xor eax, eax
-	not eax
-	xor ecx, ecx
-	mov esi, Prefix.kernel
-
-	call Print.string
-
 	mov eax, 0x00CC0000
+	xor ecx, ecx
 	mov esi, .msg
 
-	call Print.string
+	call Print.prefixedString
 
 	popa
 	ret
@@ -285,17 +327,11 @@ DifferentAutorunFile:
 
 	call Print.newLine
 
-	xor eax, eax
-	not eax
-	xor ecx, ecx
-	mov esi, Prefix.kernel
-
-	call Print.string
-
 	mov eax, 0x00CC0000
+	xor ecx, ecx
 	mov esi, .msg
 
-	call Print.string
+	call Print.prefixedString
 
 	popa
 	ret
@@ -359,7 +395,7 @@ Conv:
         mov esi, .HexConvTable
         add esi, ebx
         mov dl, [esi]
-        mov al, dl
+        mov ah, dl
         sub esi, ebx
 
         pop dx
@@ -369,7 +405,7 @@ Conv:
         mov bl, dl
         add esi, ebx
         mov dl, [esi]
-        mov ah, dl
+        mov al, dl
         sub esi, ebx
 
         pop ebx
@@ -394,6 +430,50 @@ Conv:
         mov ebx, eax
         pop eax
         ret
+
+	.reverseBytes: ; edx - bytes to reverse. Output: edx - reversed bytes.
+		ror dl, 4
+		ror edx, 8
+
+		ror dl, 4
+		ror edx, 8
+
+		ror dl, 4
+		ror edx, 8
+
+		ror dl, 4
+		ror edx, 8
+
+		ret
+
+	.hexToBCD32: ; edx - hex number. Output: ebx - BCD number, edx - leftover hex number, CF - set if number didn't fit register
+		push eax
+		push ecx
+		push edi
+
+		mov ecx, 32/4
+		mov eax, edx
+		xor ebx, ebx
+		mov edi, 10
+
+		.hexToBCD32.loop:
+			xor edx, edx
+			idiv edi
+
+			add ebx, edx
+			ror ebx, 4
+
+			loop .hexToBCD32.loop
+
+		mov edx, eax
+		cmp edx, 0
+		jz .hexToBCD32.end
+		stc
+		.hexToBCD32.end:
+		pop edi
+		pop ecx
+		pop eax
+		ret
 
 DebugMode:
 	.start:
@@ -461,6 +541,30 @@ Power:
 		mov  al, 0xFE
 		out  0x64, al
 
+Sleep: ; ecx - clock ticks to wait
+; note - this will break if clockTicks is close to overflow or ecx is really high
+	pusha
+
+	push es
+	mov ax, Segments.Variables
+	mov es, ax
+
+	mov edx, es:[Clock.clockTicks]
+
+	.loop:
+		hlt
+
+		push edx
+		add edx, ecx
+		cmp edx, es:[Clock.clockTicks]
+		pop edx
+		jnbe .loop
+
+	pop es
+
+	popa
+	ret
+
 %include "Drivers/VGA.asm"
 %include "Drivers/ATA.asm"
 %include "Drivers/AHCI.asm"
@@ -479,34 +583,44 @@ Power:
 %include "KernelIncludes/API.asm"
 %include "KernelIncludes/Syscall.asm"
 %include "KernelIncludes/DeviceListTools.asm"
+%include "KernelIncludes/CurrentContext.asm"
 
 %include "GenericDrivers/GenericInit.asm"
 
+
 section .rodata
 
+%include "KernelIncludes/Glyphs.asm"
 
-StartupText:  db (.end-$-1), "Kernel: FlameOS Starting up...", 10
-			  db             "Kernel: Video driver initialised.", 10
+StartupText:  				db (.end-$-1), "FlameOS Starting up...", 10
 	.end:
 
-IDTloaded:	  db (.end-$-1), "Kernel: IDT initialised.", 10
+VideoDriver:  				db (.end-$-1), "Video driver initialised.", 10
 	.end:
 
-NoAutorunFile:	  db (.end-$-1), "Kernel: Autorun file index is corrupt.", 10
+IDTloaded:	  				db (.end-$-1), "IDT initialised.", 10
+	.end:
+
+NoAutorunFile:				db (.end-$-1), "Autorun file index is corrupt.", 10
+	.end:
+
+Prefix.kernel: 				db Prefix.kernel.end-$-1, "Kernel: "
+Prefix.kernel.end:
+
+NoTerminalFile.msg: 		db (.end-$-1), "Terminal file is missing or filename is modified."
+	.end:
+
+DifferentAutorunFile.msg: 	db (.end-$-1), "Autorun file index is modified."
+	.end:
+
+InitDone: 	db (.end-$-1), "Initialisation done.", 10
 	.end:
 
 Conv.HexConvTable: db "0123456789ABCDEF"
-
-Prefix.kernel: db NoTerminalFile.msg-Prefix.kernel-1, "Kernel: "
-NoTerminalFile.msg: db DifferentAutorunFile.msg-NoTerminalFile.msg-1, "Terminal file is missing or filename is modified."
-DifferentAutorunFile.msg: db NoTerminalFile.end-DifferentAutorunFile.msg-1, "Autorun file index is modified."
-NoTerminalFile.end:
 
 
 Strings:
 	.Terminal:
 		db 'Terminal.ub', 0
 
-
-%include "KernelIncludes/Glyphs.asm"
 ; times 0x200*(0x30-ThirdBootloaderSize)-($-$$) db 0

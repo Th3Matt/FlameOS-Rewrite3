@@ -40,36 +40,41 @@ SCREEN_HEIGHT equ 600
     VariablesBase                       equ 0x0
 
     ; Graphics dirver info
-        GraphicsDriverNameString        equ 1                               ; 4 bytes
-        GraphicsCardAddress             equ GraphicsDriverNameString+4      ; 4 bytes
-        GraphicsFramebufferAddress      equ GraphicsCardAddress+4           ; 4 bytes
-        ScreenWidth                     equ GraphicsFramebufferAddress+4    ; 4 bytes
-        ScreenHeight                    equ ScreenWidth+4                   ; 4 bytes
-        VESAMode                        equ ScreenHeight+4                  ; 4 bytes ; VESA mode for 800x600x32bpp
-        VideoHardwareInterfaces         equ VESAMode+4                      ; 4 bytes
-        TotalPixels                     equ VideoHardwareInterfaces+4       ; 4 bytes
-        CharsPerLine                    equ TotalPixels+4                   ; 4 bytes
-        LinesPerScreen                  equ CharsPerLine+4                  ; 4 bytes
-        TotalChars                      equ LinesPerScreen+4                ; 4 bytes
+        GraphicsDriverNameString        equ 1                                   ; 4 bytes
+        GraphicsCardAddress             equ GraphicsDriverNameString+4          ; 4 bytes
+        GraphicsFramebufferAddress      equ GraphicsCardAddress+4               ; 4 bytes
+        ScreenWidth                     equ GraphicsFramebufferAddress+4        ; 4 bytes
+        ScreenHeight                    equ ScreenWidth+4                       ; 4 bytes
+        VESAMode                        equ ScreenHeight+4                      ; 4 bytes ; VESA mode for 800x600x32bpp
+        VideoHardwareInterfaces         equ VESAMode+4                          ; 4 bytes
+        TotalPixels                     equ VideoHardwareInterfaces+4           ; 4 bytes
+        CharsPerLine                    equ TotalPixels+4                       ; 4 bytes
+        LinesPerScreen                  equ CharsPerLine+4                      ; 4 bytes
+        TotalChars                      equ LinesPerScreen+4                    ; 4 bytes
 
-    Clock                               equ VariablesBase+0x40 ; 4 byte
+    Clock                               equ VariablesBase+0x40                  ; 4 byte
 
     ; Segments for kernel drivers
-        AllocSegments.VFS_Data          equ Clock+4 ; 2 byte
+        AllocSegments.VFS_Data          equ Clock+4                             ; 2 bytes
+        AllocSegments.AHCI_Data         equ AllocSegments.VFS_Data+2            ; 2 bytes
 
-    CustomSetting                       equ VariablesBase+0x80 ; First two bits control the detection of disks on ATA buses 0 and 1
+    CustomSetting                       equ VariablesBase+0x80                  ; 2 bytes
+    ; First two bits control the detection of disks on ATA buses 0 and 1, the third, if set, prints PCI Device table.
 
     ; FlameFS partition info
-        FlPartitionInfo.firstSector     equ CustomSetting+2  ; 8 bytes
+        FlPartitionInfo.firstSector     equ CustomSetting+2                     ; 8 bytes
 
-    DiskDriverVariableSpace             equ FlPartitionInfo.firstSector+0x7E ; 0x50 bytes
-    PCIDriverVariableSpace              equ DiskDriverVariableSpace+0x50     ; 0x50 bytes
-    PS2Devices                          equ PCIDriverVariableSpace+0x50      ; 8 bytes
-    GenericDriverVariables              equ PS2Devices+8                     ; 4 bytes
+    DiskDriverVariableSpace             equ FlPartitionInfo.firstSector+0x7E    ; 0x50 bytes
+    PCIDriverVariableSpace              equ DiskDriverVariableSpace+0x50        ; 0x50 bytes
+    PS2Devices                          equ PCIDriverVariableSpace+0x50         ; 8 bytes
+    GenericDriverVariables              equ PS2Devices+8                        ; 4 bytes
 
-    TextModeVariableSpace               equ GenericDriverVariables+4         ; 0x10 bytes
-    ScreenOwnershipBuffer               equ TextModeVariableSpace+0x10       ; 1+8 bytes
-    ACPIDriverVariableSpace             equ ScreenOwnershipBuffer+9
+    TextModeVariableSpace               equ GenericDriverVariables+4            ; 0x10 bytes
+    ScreenOwnershipBuffer               equ TextModeVariableSpace+0x10          ; 1+8 bytes
+
+    CurrentContextVariables             equ ScreenOwnershipBuffer+9             ; 0x31 bytes
+
+    ACPIDriverVariableSpace             equ CurrentContextVariables+0x31
 
 %macro SWITCH_TO_SYSTEM_LDT 1
     sldt %1
@@ -82,3 +87,17 @@ SCREEN_HEIGHT equ 600
     pop %1
     lldt %1
 %endmacro
+
+%macro STOP_AND_CHECK 1
+    	mov ebx, %1
+
+    xor eax, eax
+    xor ecx, ecx
+    not eax
+    call Print.hex32
+
+    hlt
+    jmp $-1
+%endmacro
+
+;%define DEBUGMEM

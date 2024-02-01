@@ -1,5 +1,6 @@
 FileDescriptorSize equ 0x1A
-BootFileSize equ 0x30
+BootFileSize equ 0x40
+
 
 FlFS:
     .init: ; ds - segment containing LDT
@@ -8,6 +9,11 @@ FlFS:
         push ds
         push es
         push edx
+
+        mov ax, Segments.KernelCode
+        mov ds, ax
+        mov esi, Prefix.FLFS
+        call CurrentContext.addNew
 
         mov ax, Segments.FS_Header
         mov fs, ax
@@ -97,13 +103,16 @@ FlFS:
         push ecx
         xor ecx, ecx
 
-        call Print.string
+        call Print.prefixedString
 
         pop ecx
 
         pop es
         pop ds
         pop fs
+
+        call CurrentContext.delContext
+
         popa
         ret
 
@@ -112,7 +121,7 @@ FlFS:
             mov esi, .DiskNotFoundMsg
             xor ecx, ecx
 
-            call Print.string
+            call Print.prefixedString
 
             hlt
             jmp $-1
@@ -122,7 +131,7 @@ FlFS:
             mov esi, .FSSignatureWrongMsg
             xor ecx, ecx
 
-            call Print.string
+            call Print.prefixedString
 
             hlt
             jmp $-1
@@ -134,7 +143,7 @@ FlFS:
             mov esi, .KernelFileMissingMsg
             xor ecx, ecx
 
-            call Print.string
+            call Print.prefixedString
 
             hlt
             jmp $-1
@@ -182,6 +191,7 @@ FlFS:
         .readFile.end:
             pop es
             pop fs
+
             popa
             ret
 
@@ -211,7 +221,7 @@ FlFS:
         xor edx, edx
         mov dl,  fs:[eax]
 
-        SWITCH_BACK_TO_PROCESS_LDT dx
+        SWITCH_BACK_TO_PROCESS_LDT ax
 
         pop eax
         pop fs
@@ -306,11 +316,13 @@ FlFS:
 
     section .rodata
 
-    .FoundBootDiskMsg:     db .FSSignatureWrongMsg-.FoundBootDiskMsg-1,     'FlFS: Boot disk found.', 10
-    .FSSignatureWrongMsg:  db .KernelFileMissingMsg-.FSSignatureWrongMsg-1, 'FlFS: FLFS signature not found.', 10
-    .KernelFileMissingMsg: db .DiskNotFoundMsg-.KernelFileMissingMsg-1,     "FlFS: Kernel file '48Boot.sb' not found.", 10
-    .DiskNotFoundMsg:      db .end-.DiskNotFoundMsg-1,                      'FlFS: Boot disk not found.', 10
+    .FoundBootDiskMsg:     db .FSSignatureWrongMsg-.FoundBootDiskMsg-1,     'Boot disk found.', 10
+    .FSSignatureWrongMsg:  db .KernelFileMissingMsg-.FSSignatureWrongMsg-1, 'FLFS signature not found.', 10
+    .KernelFileMissingMsg: db .DiskNotFoundMsg-.KernelFileMissingMsg-1,     "Kernel file '64Boot.sb' not found.", 10
+    .DiskNotFoundMsg:      db .end-.DiskNotFoundMsg-1,                      'Boot disk not found.', 10
     .end:
-    .KernelFileName: db '48Boot.sb', 0
+    .KernelFileName: db '64Boot.sb', 0
 
+Prefix.FLFS: db (Prefix.FLFS.end-$-1), "FlFS: "
+Prefix.FLFS.end:
     section .text

@@ -11,7 +11,7 @@ MemoryManager:
 
 		xor edi, edi
 
-		mov ecx, (0x40000-0x26000)/4
+		mov ecx, (0x6ffff-0x60000)/4
 		xor eax, eax
 
 		rep stosd
@@ -125,6 +125,18 @@ MemoryManager:
 
         .memAlloc.end:
 
+%ifdef DEBUGMEM
+    pusha 
+   
+    mov ebx, eax
+    mov eax, 0x00888888
+    xor ecx, ecx
+
+    call Print.hex32 
+  
+    popa
+%endif
+
         pop ebx
         pop edx
         pop edi
@@ -164,6 +176,54 @@ MemoryManager:
             mov bx, 0xFFFF
             call Print.refresh
             jmp $
+
+    .memAllocAtLocation: ; ecx - ammount of 4 KiB blocks to allocate, edi - location.
+        pusha
+        push es
+
+        mov ax, Segments.MemAllocData
+		    mov es, ax
+
+        sub edi, 0x110000
+        shr edi, 12
+
+        mov eax, 1
+
+        add edi, ecx
+        push ecx
+
+        mov ecx, edi
+        shr edi, 5
+        and ecx, 11111b
+
+        shl eax, cl
+
+        pop ecx
+
+        xor edx, edx
+
+        .memAllocAtLocation.setBits:
+            or [es:edi], eax
+            inc edx
+            shr eax, 1
+            jnz .memAllocAtLocation.setBits.2
+
+            cmp edx, ecx
+            jnl .memAllocAtLocation.end
+
+            mov eax, 80000000h
+            sub edi, 4
+
+        .memAllocAtLocation.setBits.2:
+            cmp edx, ecx
+            jl .memAllocAtLocation.setBits
+
+
+        .memAllocAtLocation.end:
+
+        pop es
+        popa
+        ret
 
     .memFreeAll:  ; eax - process ID ; Note: frees all memory taken by process with PID
         push eax
@@ -462,7 +522,7 @@ LDT:
         push ecx
         push esi
 
-        shl ecx, 3+8
+        shl ecx, 3+4+4 ; *0x800
         and esi, 111111111111111111111111111000b
         add esi, ecx
         and byte [ds:esi+5], 0
@@ -511,4 +571,33 @@ LDT:
         pop edi
         pop ecx
         pop eax
+        ret
+
+    .getEntryBaseAddress: ; ds - entry. Output: esi - address.
+        push eax
+        push ecx
+        push ds
+
+        xor eax, eax
+        mov ax, ds
+        and eax, 0xFFFFFFFF^(111b)
+
+        call ProcessManager.getCurrentPID
+        shl ecx, 3+8
+        add eax, ecx
+
+        mov si, Segments.UserspaceMem
+        mov ds, si
+
+        mov cl, ds:[eax+7]
+        shl ecx, 8
+        mov cl, ds:[eax+4]
+        shl ecx, 16
+        mov cx, ds:[eax+2]
+        mov esi, ecx
+
+        pop ds
+        pop ecx
+        pop eax
+
         ret

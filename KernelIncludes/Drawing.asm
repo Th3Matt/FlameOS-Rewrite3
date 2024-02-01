@@ -150,7 +150,7 @@ Print:
         pop ebx
         ret
 
-    .stringAtLocation:    ; eax - Pixel color, ecx - background color dword, edx - First char printing location, esi - String start address, edi - String length, ds - string segment
+    .stringAtLocation:    ; eax - Pixel color, ecx - background color dword, edx - First char printing location, ds:esi - String start address, edi - String length
         push ebx
         push ecx
         dec edi
@@ -183,7 +183,7 @@ Print:
         pop ebx
         ret
 
-    .stringWithSize:    ; eax - Pixel color, ecx - background color dword, esi - String start address, edi - String length, ds - string segment
+    .stringWithSize:    ; eax - Pixel color, ecx - background color dword, ds:esi - String start address, edi - String length
         push es
         push edx
         push eax
@@ -201,7 +201,7 @@ Print:
         pop es
         ret
 
-    .string:    ; eax - Pixel color, ecx - background color dword, esi - String start address, ds - string segment
+    .string:    ; eax - Pixel color, ecx - background color dword, ds:esi - String start address
         push edi
         push esi
 
@@ -395,14 +395,98 @@ Print:
         pop ecx
         ret
 
-    .hex32_Syscall:             ; eax - color dword, edx - dword to print, ecx - bg color dword
-        mov ebx, edx
+    .dec32AtLocation: ; eax - color dword, ebx - dword to print, ecx - bg color dword, edx - location on screen
+        push ebx
+        push edi
+        push ebp
 
-        call .hex32
+        mov ebp, esp
+        mov edi, edx
+        mov edx, ebx
 
+        .dec32AtLocation.convert:
+        call Conv.hexToBCD32
+
+        push ebx
+        jc .dec32AtLocation.convert
+
+        mov edx, edi
+
+        pop ebx
+        call .dec32AtLocation.printFirst
+
+        cmp esp, ebp
+        jz .dec32AtLocation.end
+
+        .dec32AtLocation.printLoop:
+        pop ebx
+        ;STOP_AND_CHECK eax
+        call .hex32AtLocation
+
+        cmp esp, ebp
+        jnz .dec32AtLocation.printLoop
+
+        .dec32AtLocation.end:
+
+        pop ebp
+        pop edi
+        pop ebx
         ret
 
-    .hex32:             ; eax - color dword, ebx - dword to print, ecx - bg color dword
+        .dec32AtLocation.printFirst: ; this gets rid of zeros before the number
+			push edi
+			push esi
+			mov edi, 0xF0000000
+			mov esi, 7
+
+			.dec32AtLocation.printFirst.loop:
+				test edi, ebx
+				jnz .dec32AtLocation.printFirst.print
+
+				dec esi
+				shr edi, 4
+				jnz .dec32AtLocation.printFirst.loop
+
+				mov esi, 0
+				mov edi, 0xF
+
+				.dec32AtLocation.printFirst.print:
+					push ebx
+
+					push ecx
+					mov ecx, esi
+					shl ecx, 2
+
+					and ebx, edi
+					shr ebx, cl
+
+					pop ecx
+
+					push eax
+					push edx
+					mov edx, ebx
+
+					call Conv.hexToChar8
+					;STOP_AND_CHECK eax
+
+					movzx ebx, al
+
+					pop edx
+					pop eax
+
+					call .charAtLocation
+					inc edx
+
+					pop ebx
+					dec esi
+					shr edi, 4
+					jnz .dec32AtLocation.printFirst.print
+
+			pop esi
+			pop edi
+			ret
+
+    .dec32:          ; eax - color dword, ebx - dword to print, ecx - bg color dword
         push es
         push edx
         push eax
@@ -412,13 +496,14 @@ Print:
 
         mov edx, es:[TMV.NextPlaceToPrintChar]
 
-        call .hex32AtLocation
+        call .dec32AtLocation
 
         mov es:[TMV.NextPlaceToPrintChar], edx
 
         pop edx
         pop es
         ret
+
 
     .hex32AtLocation:   ; eax - color dword, ebx - dword to print, ecx - bg color dword, edx - location on screen
         xchg ebx, ecx
@@ -428,6 +513,7 @@ Print:
         mov ebp, esp
 
         xchg ecx, edx
+        call Conv.reverseBytes
         ror edx, 16
         call Conv.hexToChar16
 
@@ -550,6 +636,59 @@ Print:
         pop ebp
         xchg ebx, ecx
         ret
+
+    .hex32:             ; eax - color dword, ebx - dword to print, ecx - bg color dword
+        push es
+        push edx
+        push eax
+        mov ax, Segments.Variables
+        mov es, ax
+        pop eax
+
+        mov edx, es:[TMV.NextPlaceToPrintChar]
+
+        call .hex32AtLocation
+
+        mov es:[TMV.NextPlaceToPrintChar], edx
+
+        pop edx
+        pop es
+        ret
+
+    .hex32_Syscall:				; eax - color dword, edx - dword to print, ecx - bg color dword
+        mov ebx, edx
+
+        call .hex32
+
+        ret
+
+	.context: ; eax - Pixel color, ecx - background color dword.
+		pusha
+		push ds
+
+		mov si, 0x10
+		mov ds, si
+
+		movzx esi, byte ds:[CurrentContext.AmmountOfContexts]
+		dec esi
+		shl esi, 4 ; *0x10
+		add esi, CurrentContext.StartOfContexts
+
+		call .string
+
+		pop ds
+		popa
+		ret
+
+	.prefixedString:				; eax - Pixel color, ecx - background color dword, ds:esi - String start address
+		pusha
+
+		call .context
+
+		call .string
+
+		popa
+		ret
 
     .addFramebuffer: ; ecx - PID, si - new framebuffer segment
         push eax

@@ -102,11 +102,11 @@ VFS:
         je .error1
 
         call FlFS.getFileNumber
+        jc .error1
 
         call LDT.set
-        mov ecx, edx
 
-        jc .error1
+        mov ecx, edx
 
         cmp ebx, 0
         jz .readFileForNewProcess.skipCheck
@@ -171,6 +171,12 @@ VFS:
             popa
         .error1.postpop:
             stc
+
+            push ecx
+			call ProcessManager.getCurrentPID
+			call LDT.set
+			pop ecx
+
             mov ebx, 0x00000001 ; Impossible path
             ret
 
@@ -178,6 +184,12 @@ VFS:
             popa
         .error2.postpop:
             stc
+
+            push ecx
+			call ProcessManager.getCurrentPID
+			call LDT.set
+			pop ecx
+
             mov ebx, 0x00000002 ; Not permitted to access
             ret
 

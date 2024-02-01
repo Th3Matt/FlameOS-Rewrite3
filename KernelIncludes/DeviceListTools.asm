@@ -1,8 +1,9 @@
 DeviceList.Size equ 0
 DeviceList.FirstEntry equ 0x80
 DeviceList.DeviceTypeOffset equ 0
-DeviceList.ProtocolOffset equ 2*2
-DeviceList.EntryDriverDataOffset equ 2*3
+DeviceList.ProtocolOffset equ 4
+DeviceList.EntryDriverDataOffset equ 4+2+4
+DeviceList.SizeCap equ 0x10000
 
 DeviceList:
     .init:
@@ -38,9 +39,9 @@ DeviceList:
 
         xor esi, esi
         mov si, [ds:DeviceList.Size]
-        shl esi, 7
-        cmp esi, 0x10000
-        jz .addDevice.noSpace
+        shl esi, 3+4 ; *0x80
+        cmp esi, DeviceList.SizeCap
+        jge .addDevice.noSpace
 
         mov [ds:DeviceList.FirstEntry+si], eax
         mov [ds:DeviceList.FirstEntry+si+4], bx
@@ -73,9 +74,9 @@ DeviceList:
 
         push ecx
 
-        and ecx, 0x7f
+        and esi, 0x7f
         dec ecx
-        shl ecx, 7
+        shl ecx, 3+4 ; *0x80
         add esi, ecx
 
         mov [ds:esi+DeviceList.FirstEntry+DeviceList.EntryDriverDataOffset], eax
@@ -96,9 +97,9 @@ DeviceList:
 
         push ecx
 
-        and ecx, 0x7f
+        and esi, 0x7f
         dec ecx
-        shl ecx, 7
+        shl ecx, 3+4 ; *0x80
         add esi, ecx
 
         mov [ds:esi+DeviceList.FirstEntry+DeviceList.EntryDriverDataOffset], ax
@@ -119,9 +120,9 @@ DeviceList:
 
         push ecx
 
-        and ecx, 0x7f
+        and esi, 0x7f
         dec ecx
-        shl ecx, 7
+        shl ecx, 3+4 ; *0x80
         add esi, ecx
 
         mov [ds:esi+DeviceList.FirstEntry+DeviceList.EntryDriverDataOffset], al
@@ -142,9 +143,9 @@ DeviceList:
 
         push ecx
 
-        and ecx, 0x7f
+        and esi, 0x7f
         dec ecx
-        shl ecx, 7
+        shl ecx, 3+4 ; *0x80
         add esi, ecx
 
         mov eax, [ds:esi+DeviceList.FirstEntry+DeviceList.EntryDriverDataOffset]
@@ -165,9 +166,9 @@ DeviceList:
 
         push ecx
 
-        and ecx, 0x7f
+        and esi, 0x7f
         dec ecx
-        shl ecx, 7
+        shl ecx, 3+4 ; *0x80
         add esi, ecx
 
         mov ax, [ds:esi+DeviceList.FirstEntry+DeviceList.EntryDriverDataOffset]
@@ -188,9 +189,9 @@ DeviceList:
 
         push ecx
 
-        and ecx, 0x7f
+        and esi, 0x7f
         dec ecx
-        shl ecx, 7
+        shl ecx, 3+4 ; *0x80
         add esi, ecx
 
         mov al, [ds:esi+DeviceList.FirstEntry+DeviceList.EntryDriverDataOffset]
@@ -210,7 +211,7 @@ DeviceList:
         pop eax
 
         dec ecx
-        shl ecx, 7
+        shl ecx, 3+4 ; *0x80
 
         mov eax, [ds:DeviceList.FirstEntry+ecx]
         mov bx, [ds:DeviceList.FirstEntry+ecx+4]
@@ -230,7 +231,7 @@ DeviceList:
         push ecx
 
         dec ecx
-        shl ecx, 7
+        shl ecx, 3+4 ; *0x80
 
         mov dword [ds:DeviceList.FirstEntry+ecx], 0
         mov word [ds:DeviceList.FirstEntry+ecx+4], 0
@@ -260,7 +261,7 @@ DeviceList:
             cmp edx, ecx
             jnz .findDevice.next2
 
-        shr esi, 7
+        shr esi, 3+4 ; *0x80 
         mov eax, esi
         inc eax
 
@@ -274,8 +275,8 @@ DeviceList:
             inc edx
         .findDevice.next:
             add esi, DeviceList.FirstEntry
-            cmp esi, 0x2000
-            jz .findDevice.notFound
+            cmp esi, DeviceList.SizeCap
+            jge .findDevice.notFound
             jmp .findDevice.check
 
         .findDevice.notFound:

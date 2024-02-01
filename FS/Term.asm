@@ -328,22 +328,41 @@ Terminal:
         jz .enter.cleanup
 
         pop ds
-        xor eax, eax
-        not eax
 
-        mov esi, FileNotFound
+        cmp eax, 1
+        jne .enter.noPermission
 
-        xor ebx, ebx
-        xor ecx, ecx
+        .enter.noFile:
 
-        int 0x30 ; print file not found
+            xor eax, eax
+            not eax
 
-        mov ebx, 0x3
-        int 0x30
+            mov esi, FileNotFound
 
-        push ds
-        mov si, fs
-        mov ds, si
+            xor ebx, ebx
+            xor ecx, ecx
+
+            int 0x30 ; print file not found
+
+            jmp .enter.errorPrinted
+
+        .enter.noPermission:
+
+            xor eax, eax
+            not eax
+
+            mov esi, PermissionDenied
+
+            xor ebx, ebx
+            xor ecx, ecx
+
+            int 0x30 ; print file not found
+
+        .enter.errorPrinted:
+
+            push ds
+            mov si, fs
+            mov ds, si
 
         .enter.cleanup:
             push es
@@ -439,7 +458,10 @@ StartupText: db .end-StartupText-1, "FlameShell v1.1 started."
 Prompt: db .end-Prompt-1, "FlameShell | "
     .end:
 
-FileNotFound: db .end-FileNotFound-1, "FlameShell: File not found."
+FileNotFound: db .end-FileNotFound-1, "FlameShell: File not found.", 10
+    .end:
+
+PermissionDenied: db .end-PermissionDenied-1, "FlameShell: Permission denied.", 10
     .end:
 
 ExitCommand: db "exit", 0

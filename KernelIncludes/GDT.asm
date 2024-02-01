@@ -86,8 +86,8 @@
 
     add di, 4
                     ;---------------------28       -      28         -   Kernel Code
-                    ;20000 - 25fff
-    mov ax, 0x5fff
+                    ;20000 - 2ffff
+    mov ax, 0xffff
     mov [di], ax
 
     add di, 2
@@ -287,22 +287,22 @@
 
     add di, 4
                     ;---------------------78       -      78         -   MemAlloc Data
-                    ;26000 - 3ffff
-    mov ax, 0x9fff
+                    ;30000 - 3ffff
+    mov ax, 0xffff
     mov [di], ax
 
     add di, 2
 
-    mov ax, 0x6000
+    mov ax, 0x0000
     mov [di], ax
 
     add di, 2
 
     xor ecx, ecx
-    mov ch, 01010001b
+    mov ch, 01010000b
     shl ecx, 8
     mov ch, 10010010b
-    mov cl, 0x2
+    mov cl, 0x3
     mov [di], ecx
 
     add di, 4

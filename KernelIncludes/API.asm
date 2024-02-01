@@ -1,8 +1,9 @@
 Clock.clockTicks equ Clock
 
 API:
-    .quickLoad: ; ds:esi - path to executable.
+    .quickLoad: ; ds:esi - path to executable. Output: eax - error code (1 - file not found, 2 - not executable)
         push edx
+        push ecx
         xor eax, eax
         mov edx, 0x3
 
@@ -33,12 +34,15 @@ API:
         pop es
 
         xor eax, eax
+
+        pop ecx
         pop edx
         ret
 
         .quickLoad.error:
             mov eax, ebx
 
+            pop ecx
             pop edx
             ret
 
@@ -74,6 +78,14 @@ API:
 
     .alloc: ; ecx - requested blocks of 4 KiB, edx - cpu ring. Output: si - segment.
         push eax
+
+        call .allocWithAddress
+
+        pop eax
+
+        ret
+
+    .allocWithAddress: ; ecx - requested blocks of 4 KiB, edx - cpu ring. Output: eax - allocation address, si - segment.
         push ebx
         push ecx
         push edx
@@ -84,16 +96,9 @@ API:
         mov eax, ecx
         pop ecx
         call MemoryManager.memAlloc
-        push eax
 
-        push edx
-        mov eax, 0x1000  ;
-        mul ecx          ; Calculating size
-        mov ebx, eax     ;
-        dec ebx          ;
-        pop edx
-
-        pop eax
+        shl ecx, 4+4+4 ;*0x1000 
+        mov ebx, ecx
 
         push ds
         mov si, Segments.UserspaceMem
@@ -106,6 +111,7 @@ API:
         or esi, edx
         or esi, 100b
 
+        push eax
         push es
         mov es, si
         xor edi, edi
@@ -115,6 +121,39 @@ API:
 
         rep stosb ; clearing memory (for security)
         pop es
+		    pop eax
+
+        pop ds
+        pop edi
+        pop edx
+        pop ecx
+        pop ebx
+
+        ret
+
+    .allocAtLocation: ; ecx - requested blocks of 4 KiB, edx - cpu ring, edi - location. Output: si - segment.
+        push eax
+        push ebx
+        push ecx
+        push edx
+        push edi
+
+        call MemoryManager.memAllocAtLocation
+
+        shl ecx, 12
+        mov ebx, ecx
+
+        push ds
+        mov si, Segments.UserspaceMem
+        mov ds, si
+
+        mov eax, edi
+
+        call ProcessManager.getCurrentPID
+
+        call LDT.createEntry
+
+        or esi, 100b
 
         pop ds
         pop edi

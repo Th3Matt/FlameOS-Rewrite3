@@ -45,8 +45,10 @@ ADA2    equ DiskDriverVariableSpace+0x11 ; ATA disk availability field for bus 2
 
 EndOfATADriverSpace equ DiskDriverVariableSpace+0x20
 
-ATA_CMD_READ_PIO  equ 0x20
-ATA_CMD_WRITE_PIO equ 0x30
+ATA.CMD.READ.PIO      equ 0x20
+ATA.CMD.READ.DMA_EXT  equ 0x25
+ATA.CMD.WRITE.PIO     equ 0x30
+ATA.CMD.IDENTIFY      equ 0xEC
 
 ATA_MAX_DRIVE_ERRORS equ 3
 
@@ -367,7 +369,7 @@ S_ATA_PI:
             out dx, al ; Sector count register
 
             add edx, 5
-            mov eax, 0xEC
+            mov eax, ATA.CMD.IDENTIFY
 
             out dx, al ; Command register
 
@@ -783,7 +785,7 @@ S_ATA_PI:
         out dx,  al
 
         add dx,  ATA_CR-2
-        mov al,  ATA_CMD_READ_PIO
+        mov al,  ATA.CMD.READ.PIO
 
         out dx, al
 
@@ -920,7 +922,7 @@ S_ATA_PI:
         out dx,  al
 
         add dx,  ATA_CR-2
-        mov al,  ATA_CMD_READ_PIO
+        mov al,  ATA.CMD.READ.PIO
 
         out dx, al
 
@@ -1009,7 +1011,7 @@ S_ATA_PI:
         out dx,  al
 
         add dx,  ATA_CR-2
-        mov al,  ATA_CMD_WRITE_PIO
+        mov al,  ATA.CMD.WRITE.PIO
 
         out dx, al
 

@@ -3,7 +3,7 @@
 #include <string.h>
 
 #define FILE_NAME_LENGTH 15
-#define KERNEL_SIZE 0x30
+#define KERNEL_SIZE 0x40
 #define DESCRIPTOR_SIZE 0x1A
 #define STARTUP_FILE 0x1
 
@@ -86,7 +86,7 @@ int main()
     std::cout << "Info sector formed.\n";
 
     FSBinFile << (char)5;
-    FSBinFile.write("48Boot.sb\0\0\0\0\0\0", FILE_NAME_LENGTH);
+    FSBinFile.write("64Boot.sb\0\0\0\0\0\0", FILE_NAME_LENGTH);
     FSBinFile << (char)0;
     FSBinFile << (char)0;
 

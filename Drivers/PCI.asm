@@ -375,15 +375,14 @@ PCIDriver:
         pop edi
         ret
 
-    .getBAR: ; eax - (Bus << 16) + (Device << 11) + (Function << 8), ebx - BAR number. Output: eax - LDT segment/IO address, ebx - size.
+    .getBAR: ; eax - (Bus << 16) + (Device << 11) + (Function << 8), ebx - BAR number. Output: eax - IO address, ebx - size, esi - LDT segment.
         push edi
+        push ecx
 
         call .deviceByLocation
-        jc .deviceInfoByLocation.end
+        jc .getBAR.end
 
-        push ecx
         push eax
-
         push ds
         push ebx
 
@@ -401,67 +400,134 @@ PCIDriver:
         pop ebx
         pop ds
         mov ecx, eax
-        pop ecx
+        pop eax
 
         cmp ecx, 0
         jz .getBAR.emptyBAR
 
-        test ecx, 1
-        jz .getBAR.mmioAddress
-
         call .getSizeOfBAR
-
         mov ebx, eax
         mov eax, ecx
 
-        pop eax
+        test eax, 1
+        jz .getBAR.mmioAddress
+
+        xor esi, esi
+
         clc
 
         .getBAR.end:
+        pop ecx
         pop edi
 
         ret
 
         .getBAR.mmioAddress:
-            pop eax
-            stc
+            mov edi, eax
+            mov ecx, ebx
+            push edx
+            xor edx, edx
+            call API.allocAtLocation
+            pop edx
+
+            clc
+
             jmp .getBAR.end
 
         .getBAR.emptyBAR:
-            pop eax
-            stc
             cmp eax, eax ; set zero flag
+            stc
             jmp .getBAR.end
 
     .getSizeOfBAR: ; eax - (Bus << 16) + (Device << 11) + (Function << 8), ebx - BAR number. Output: eax - size
         push edx
+        push ebx
         mov dx, 0xCF8
 
         and eax, 0x00FFFF00
         or eax, 1<<31
-        add eax, 4
-
-        shl ebx, 2
-        add ebx, PCIT.BAR0<<2
-        add eax, ebx
 
         push eax
-        out dx, eax
+        push ebx
+
+        add eax, 4
+        xor ebx, ebx
+        call .sendToDevice
+
+        pop ebx
+        pop eax
+
+        add eax, 4
+
+        dec ebx
+        shl ebx, 2
+        add ebx, PCIT.BAR0
+        add eax, ebx
+        inc ebx
+
+        push eax
+        out dx, eax ; address
+
         add dx, 4
+        in eax, dx  ; data ; get BAR
+
+        mov ebx, eax ; saving BAR
+        pop eax
+
+        push ebx
+        push eax
+
+        sub dx, 4
+        out dx, eax ; address
 
         xor eax, eax
         not eax
 
-        out dx, eax ; request size
+        add dx, 4
+        out dx, eax ; data ; request size
 
         pop eax
+        push eax
+
         sub dx, 4
-        out dx, eax
+        out dx, eax ; address
+
         add dx, 4
-
-        in eax, dx
+        in eax, dx  ; data ; size
+        and eax, 0xFFFFFFF0
         not eax
+        inc eax
 
+        mov ebx, eax
+
+        pop eax
+
+        sub dx, 4
+        out dx, eax ; address
+
+        pop eax ; pop ebx
+
+        add dx, 4
+        out dx, eax ; data ; restore BAR
+
+        mov eax, ebx
+
+        push eax
+        push ebx
+
+        and eax, 0x00FFFF00
+        or eax, 1<<31
+
+        add eax, 4
+        xor ebx, ebx
+              ;FEDCBA9876543210
+        or bx, 0000000001000011b
+        call .sendToDevice
+
+        pop ebx
+        pop eax
+
+        pop ebx
         pop edx
         ret
 

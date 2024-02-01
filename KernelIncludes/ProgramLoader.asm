@@ -12,10 +12,25 @@ ProgramLoader:
 
         call ProcessManager.startProcess
 
+        push edi
         push edx
         call VFS.getFileInfo
+        mov edi, edx
         pop edx
         jc .load.error
+
+        push edx
+        mov edx, edi
+        mov edi, ebx
+        mov ebx, 0x2
+
+        test dl, 100b
+        pop edx
+        pop edi
+        jz .load.error
+
+        mov ebx, esi
+
         push esi
         push eax
 
@@ -50,7 +65,12 @@ ProgramLoader:
         xor edi, edi
 
         call VFS.readFileForNewProcess
+        jnc .load.done
 
+        pop es
+        jmp .load.error
+
+        .load.done:
         xor esi, esi
         mov si, ds
 
@@ -66,6 +86,7 @@ ProgramLoader:
 
         .load.error:
             call ProcessManager.stopProcess
+
             stc
             pop esi ; pop ebx
             pop ds

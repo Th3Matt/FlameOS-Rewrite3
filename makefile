@@ -27,14 +27,14 @@ Builds/KRNL.bin: Kernel.asm Drivers/* KernelIncludes/* GenericDrivers/*
 	ld -melf_i386 -T linker.ld -o Builds/KRNL.tmp
 	nm Builds/KRNL.tmp | sort | grep -E "[0-9a-f]{8} [b-zA-Z] .+" | sed "s/\ [a-zA-Z]\ /\ /g" > Builds/KRNL.nm
 	objcopy -O binary Builds/KRNL.tmp Builds/KRNL.bin
-	truncate --size 21K "Builds/KRNL.bin"
+	truncate --size 29K "Builds/KRNL.bin"
 
 Builds/FS.bin: FilesystemHeader.asm FS/* FlFS.conf
 	nasm -fbin FS/Term.asm -o "Builds/Terminal.ub"
 	nasm -fbin FS/Snake.asm -o "Builds/Snake.ub"
 	nasm -fbin FS/SnakeData.asm -o "Builds/SnakeData.dat"
 	nasm -fbin FS/Clock.asm -o "Builds/Clock.ub"
-	./compileFlFS/compileFlFS
+	./compileFlFS/builds/compileFlFS
 
 Builds/OS.bin: Builds/FBL.bin Builds/BL.bin Builds/TBL.bin Builds/KRNL.bin Builds/FS.bin
 	if test -f "Builds/OS.bin"; then rm "Builds/OS.bin"; fi
