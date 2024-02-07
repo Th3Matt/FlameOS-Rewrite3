@@ -100,4 +100,4 @@ SCREEN_HEIGHT equ 600
     jmp $-1
 %endmacro
 
-%define DEBUGMEM
+;%define DEBUGMEM

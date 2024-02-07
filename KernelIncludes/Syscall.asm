@@ -26,6 +26,7 @@ Syscall:
         mov dword es:[(0x30<<2)+4], API.usermodeAllocate
         mov dword es:[(0x31<<2)+4], API.loadFile
         mov dword es:[(0x40<<2)+4], API.readClock
+        mov dword es:[(0x50<<2)+4], API.genRandom
 
         pop es
         popa
