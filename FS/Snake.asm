@@ -17,12 +17,25 @@ Vars.directionListReadPtr equ 9
 Vars.snakeLength equ 11
 Vars.TailX equ 13
 Vars.TailY equ 14
-Vars.directionList equ 15
+Vars.Score equ 15
+Vars.directionList equ 19
 
 StartX equ 24
 StartY equ 25
 StartSize equ 9
 MaxDirectionListSize equ 0x73B
+
+XMin equ 0
+YMin equ 4
+XMax equ 49
+YMax equ 36
+
+SnakeColor equ 0x00BB8800
+FoodColor equ 0x00BBBB00
+BackgroundColor equ 0x00008800
+MenuBackgroundColor equ BackgroundColor+Brighten
+
+Brighten equ 0x00777777
 
 SCREEN_WIDTH  equ 800
 SCREEN_HEIGHT equ 600
@@ -53,8 +66,7 @@ Snake:
 	mov es, bx
 
 	mov ecx, SCREEN_WIDTH*SCREEN_HEIGHT
-	xor eax, eax
-	not eax
+  mov eax, MenuBackgroundColor
 	xor edi, edi
 	rep stosd
 
@@ -167,8 +179,14 @@ Snake:
 		mov es, bx
 
 		xor edi, edi
-		mov ecx, SCREEN_WIDTH*SCREEN_HEIGHT
-		xor eax, eax
+    mov eax, MenuBackgroundColor
+    mov ecx, SCREEN_WIDTH*4*(SCREEN_HEIGHT/36)
+    
+    rep stosd
+
+		mov ecx, SCREEN_WIDTH*SCREEN_HEIGHT - SCREEN_WIDTH*4*(SCREEN_HEIGHT/36)
+		mov eax, BackgroundColor
+
 		rep stosd
 
 		pop es
@@ -192,72 +210,96 @@ Snake:
 		mov fs:[Vars.lastClockRecord], eax
 
 	.loop:
-		movzx esi, byte fs:[Vars.direction]
+		.loop.wait:
+      mov ebx, 0x20
+      int 0x30
 
-		mov edx, 0x00FFFFFF
-		xor ebx, ebx
+		  mov ebx, 0x40
+		  int 0x30 ; get clock tick value
+
+		  mov ebx, fs:[Vars.lastClockRecord]
+
+		  cmp eax, ebx
+		  jz .loop.wait
+
+		  add eax, 4
+		  mov fs:[Vars.lastClockRecord], eax
+
+    call MainLoop.drawPreviousBodySegment
+    call MainLoop.dealWithHead
+    call MainLoop.drawHead
+    call MainLoop.dealWithTail
+    call MainLoop.storeCurrentDirection
+    call MainLoop.registerInput
+
+		jmp .loop
+
+MainLoop:
+  .drawHead:
+    pusha
+   
+    movzx esi, byte fs:[Vars.direction]
+
+		mov edx, SnakeColor
+		mov ebx, BackgroundColor
 
 		movzx di, byte fs:[Vars.Y]
 		shl edi, 16
 		movzx di, byte fs:[Vars.X]
 
-		call DrawInTiles
+		call DrawInTiles ; draw face
 
-		.loop.short:
-
-        mov ebx, 0x20
-        int 0x30
-
-		mov ebx, 0x40
-		int 0x30
-
-		mov ebx, fs:[Vars.lastClockRecord]
-
-		cmp eax, ebx
-		jz .loop.short
-
-		add eax, 4
-		mov fs:[Vars.lastClockRecord], eax
+    popa
+    ret
+  
+  .dealWithHead:
+    pusha
 
 		xor eax, eax
 		mov al, fs:[Vars.direction]
 
 		test al, 00000010b
-		jnz .loop.coordAdd
+		jnz .dealWithHead.coordAdd
 
-		.loop.coordSub:
+		.dealWithHead.coordSub:
 
 		test al, 00000001b
-		jnz .loop.coordSub.X
-		.loop.coordSub.Y:
-			cmp byte fs:[Vars.Y], 0
-			jle .loop.coord.done
+		jnz .dealWithHead.coordSub.X
+		.dealWithHead.coordSub.Y:
+			cmp byte fs:[Vars.Y], YMin
+			jle .dealWithHead.coord.done
 			dec byte fs:[Vars.Y]
-			jmp .loop.coord.done
+			jmp .dealWithHead.coord.done
 
-		.loop.coordSub.X:
-			cmp byte fs:[Vars.X], 0
-			jle .loop.coord.done
+		.dealWithHead.coordSub.X:
+			cmp byte fs:[Vars.X], XMin
+			jle .dealWithHead.coord.done
 			dec byte fs:[Vars.X]
-			jmp .loop.coord.done
+			jmp .dealWithHead.coord.done
 
-		.loop.coordAdd:
+		.dealWithHead.coordAdd:
 
 		test al, 00000001b
-		jnz .loop.coordAdd.X
-		.loop.coordAdd.Y:
-			cmp byte fs:[Vars.Y], 36
-			jge .loop.coord.done
+		jnz .dealWithHead.coordAdd.X
+		.dealWithHead.coordAdd.Y:
+			cmp byte fs:[Vars.Y], YMax
+			jge .dealWithHead.coord.done
 			inc byte fs:[Vars.Y]
-			jmp .loop.coord.done
+			jmp .dealWithHead.coord.done
 
-		.loop.coordAdd.X:
-			cmp byte fs:[Vars.X], 49
-			jge .loop.coord.done
+		.dealWithHead.coordAdd.X:
+			cmp byte fs:[Vars.X], XMax
+			jge .dealWithHead.coord.done
 			inc byte fs:[Vars.X]
-			jmp .loop.coord.done
+			jmp .dealWithHead.coord.done
 
-		.loop.coord.done:
+		.dealWithHead.coord.done:
+    
+    popa
+    ret
+
+  .drawPreviousBodySegment: ; edi - location 
+    pusha
 
 		mov si, fs:[Vars.directionListWritePtr]
 		cmp si, 0
@@ -268,35 +310,46 @@ Snake:
 		.loop.previousDirection.done:
 		dec si
 
-		mov dl, fs:[si+Vars.directionList]
+		movzx edx, byte fs:[si+Vars.directionList]
 
-		shl dl, 2
+		shl edx, 2
 
-		add al, dl
+    movzx eax, byte fs:[Vars.direction]
+    add edx, eax
 
-		movzx si, ds:[eax+TurnTable]
+		movzx esi, byte ds:[edx+TurnTable]
 
-		mov edx, 0x00FFFFFF
-		xor ebx, ebx
+		mov edx, SnakeColor
+		mov ebx, BackgroundColor
 
-		call DrawInTiles
+		movzx di, byte fs:[Vars.Y]
+		shl edi, 16
+		movzx di, byte fs:[Vars.X]
 
-		mov esi, 6
+		call DrawInTiles ; draw snake segment
 
-		mov edx, 0x00FFFFFF
-		xor ebx, ebx
+    popa
+    ret
+
+  .dealWithTail:
+    pusha	
+
+		mov esi, 6 ; Empty space 
+
+		mov edx, SnakeColor
+		mov ebx, BackgroundColor
 
 		movzx di, byte fs:[Vars.TailY]
 		shl edi, 16
 		movzx di, byte fs:[Vars.TailX]
 
-		call DrawInTiles
+		call DrawInTiles ; clear previous tail tile
 
-		mov si, fs:[Vars.directionListReadPtr]
+    mov si, fs:[Vars.directionListReadPtr]
 		push di
 		mov di, fs:[Vars.directionListWritePtr]
-		cmp di, si
-		jge .loop.tail.coord.notWraparound
+		cmp di, si ; check if we went past the end of the list
+		jge .dealWithTail.coord.notWraparound
 
 		sub di, MaxDirectionListSize+1
 		not di
@@ -304,74 +357,75 @@ Snake:
 
 		add di, si
 
-		jmp .loop.tail.coord.wraparound.done
+		jmp .dealWithTail.coord.wraparound.done
 
-		.loop.tail.coord.notWraparound:
+		.dealWithTail.coord.notWraparound:
 		sub di, si
 
-		.loop.tail.coord.wraparound.done:
+		.dealWithTail.coord.wraparound.done:
 
 		cmp di, fs:[Vars.snakeLength]
 		pop di
-		jl .loop.tail.coord.done
+		jl .dealWithTail.coord.done
 
 		xor eax, eax
 		mov al, fs:[si+Vars.directionList]
 
-		.loop.readPtr:
+		.dealWithTail.getDirection:
 		inc word fs:[Vars.directionListReadPtr]
 		inc si
 		cmp si, MaxDirectionListSize+1
-		jl .loop.tail
+		jl .dealWithTail.coordCalc
 
-		 .loop.readPtr.overflow:
-			mov word fs:[Vars.directionListReadPtr], 0
+		.dealWithTail.getDirection.overflow:
+		
+    mov word fs:[Vars.directionListReadPtr], 0
+		
+    .dealWithTail.coordCalc:
+    
+    test al, 00000010b
+		jnz .dealWithTail.coordAdd
 
-		.loop.tail:
-
-		test al, 00000010b
-		jnz .loop.tail.coordAdd
-
-		.loop.tail.coordSub:
+		.dealWithTail.coordSub:
 
 		test al, 00000001b
-		jnz .loop.tail.coordSub.X
-		.loop.tail.coordSub.Y:
-			cmp byte fs:[Vars.TailY], 0
-			jle .loop.tail.coord.done
+		jnz .dealWithTail.coordSub.X
+		.dealWithTail.coordSub.Y:
+			cmp byte fs:[Vars.TailY], YMin
+			jle .dealWithTail.coord.done
 			dec byte fs:[Vars.TailY]
-			jmp .loop.tail.coord.done
+			jmp .dealWithTail.coord.done
 
-		.loop.tail.coordSub.X:
-			cmp byte fs:[Vars.TailX], 0
-			jle .loop.tail.coord.done
+		.dealWithTail.coordSub.X:
+			cmp byte fs:[Vars.TailX], XMin
+			jle .dealWithTail.coord.done
 			dec byte fs:[Vars.TailX]
-			jmp .loop.tail.coord.done
+			jmp .dealWithTail.coord.done
 
-		.loop.tail.coordAdd:
+		.dealWithTail.coordAdd:
 
 		test al, 00000001b
-		jnz .loop.tail.coordAdd.X
-		.loop.tail.coordAdd.Y:
-			cmp byte fs:[Vars.TailY], 36
-			jge .loop.tail.coord.done
+		jnz .dealWithTail.coordAdd.X
+		.dealWithTail.coordAdd.Y:
+			cmp byte fs:[Vars.TailY], YMax
+			jge .dealWithTail.coord.done
 			inc byte fs:[Vars.TailY]
-			jmp .loop.tail.coord.done
+			jmp .dealWithTail.coord.done
 
-		.loop.tail.coordAdd.X:
-			cmp byte fs:[Vars.TailX], 49
-			jge .loop.tail.coord.done
+		.dealWithTail.coordAdd.X:
+			cmp byte fs:[Vars.TailX], XMax
+			jge .dealWithTail.coord.done
 			inc byte fs:[Vars.TailX]
-			jmp .loop.tail.coord.done
+			jmp .dealWithTail.coord.done
 
-		.loop.tail.coord.done:
+		.dealWithTail.coord.done:
 
 		inc si
-		movzx si, byte fs:[si+Vars.directionList]
+		movzx esi, byte fs:[si+Vars.directionList]
 		add esi, 12
 
-		mov edx, 0x00FFFFFF
-		xor ebx, ebx
+		mov edx, SnakeColor
+		mov ebx, BackgroundColor
 
 		movzx di, byte fs:[Vars.TailY]
 		shl edi, 16
@@ -379,62 +433,76 @@ Snake:
 
 		call DrawInTiles
 
+    popa
+    ret
+  
+  .storeCurrentDirection:
+    pusha
 		mov al, fs:[Vars.direction]
 
 		mov si, fs:[Vars.directionListWritePtr]
 		mov fs:[si+Vars.directionList], al
 
 		cmp si, MaxDirectionListSize
-		jge .loop.writePtr.overflow
+		jge .storeCurrentDirection.overflow
 
 		inc word fs:[Vars.directionListWritePtr]
-		jmp .loop.move
+		jmp .storeCurrentDirection.end
 
-		 .loop.writePtr.overflow:
+		 .storeCurrentDirection.overflow:
 			mov word fs:[Vars.directionListWritePtr], 0
 
-		.loop.move:
+    .storeCurrentDirection.end:
+    
+    popa
+    ret
 
+  .registerInput:
 		mov ebx, 0x10
 		int 0x30
 		cmp eax, 0x0
-		jz .loop
+		jz .registerInput.end
 
 		cmp eax, 0x15 ; Q
-		jz .mainMenu.fromGame
+    jz .registerInput.quit
 
 		cmp eax, 0x1D ; W
-		jnz .loop.move.notUp
+		jnz .registerInput.notUp
 
 		mov fs:[Vars.direction], byte 0
-		jmp .loop.move.done
+		jmp .registerInput.end
 
-		.loop.move.notUp:
+		.registerInput.notUp:
 
 		cmp eax, 0x1C ; A
-		jnz .loop.move.notLeft
+		jnz .registerInput.notLeft
 
 		mov fs:[Vars.direction], byte 1
-		jmp .loop.move.done
+		jmp .registerInput.end
 
-		.loop.move.notLeft:
+		.registerInput.notLeft:
 
 		cmp eax, 0x1B ; S
-		jnz .loop.move.notDown
+		jnz .registerInput.notDown
 
 		mov fs:[Vars.direction], byte 2
-		jmp .loop.move.done
+		jmp .registerInput.end
 
-		.loop.move.notDown:
+		.registerInput.notDown:
 
 		cmp eax, 0x23 ; D
-		jnz .loop.move.done
+		jnz .registerInput.end
 
 		mov fs:[Vars.direction], byte 3
-		jmp .loop.move.done
-		.loop.move.done:
+		jmp .registerInput.end 
+		
+    .registerInput.end:
+    
+    ret
 
-		jmp .loop
+    .registerInput.quit:
+      pop eax ; clean up stack
+      jmp Snake.mainMenu.fromGame
 
 
 TurnTable:
@@ -566,7 +634,7 @@ DrawBlock:
 	pop edi
 	ret
 
-Str: db .end-Str-1, "Snake v0.0.1"
+Str: db .end-Str-1, "Snake v0.0.2"
 	.end:
 Str2: db .end-Str2-1, "Press Space to start, q to quit"
 	.end:
