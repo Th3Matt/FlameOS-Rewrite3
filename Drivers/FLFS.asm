@@ -25,12 +25,31 @@ FlFS:
         add eax, [es:FlPartitionInfo.firstSector]
         xor ebx, ebx
         mov bx, es:[EDD_DetectedDiskNumber]
+        cmp bx, 0xFFFF
+        jne .init.eddDetectedDisk
+        
+        call EDDV3Read.fuckingGuess
+
+        .init.eddDetectedDisk:
         push ebx
 
         mov ecx, 5
         xor edi, edi
 
-        call S_ATA_PI.readSectors
+        pusha
+        
+        mov ecx, 0x2
+        mov edx, 0
+        mov edi, 0xa000
+
+        call API.allocAtLocation
+
+        mov fs, si
+
+        popa
+
+        call GenericDiskD.readSectors
+
         jc .init.error
 
         cmp dword fs:[0], 0x41045015
@@ -62,7 +81,7 @@ FlFS:
         push ebx
         xor edi, edi
 
-        call S_ATA_PI.readSectors
+        call GenericDiskD.readSectors
 
         mov si, fs
         mov ds, si
@@ -149,6 +168,8 @@ FlFS:
             jmp $-1
 
     .readFile: ; eax - file number, edi - buffer address, ds - buffer segment
+        pushfd
+        cli
         pusha
         push fs
         push es
@@ -184,8 +205,8 @@ FlFS:
         mov dx, ds
         mov fs, dx
 
-        call S_ATA_PI.readSectors
-
+        call GenericDiskD.readSectors
+        
         clc
 
         .readFile.end:
@@ -193,15 +214,17 @@ FlFS:
             pop fs
 
             popa
+            popfd
             ret
 
         .readFile.noFile:
-            pop bx
-            lldt bx
+            SWITCH_BACK_TO_PROCESS_LDT bx
             stc
             jmp .readFile.end
 
     .getFileInfo: ; eax - file number. Output: ebx - file size, cl - UserID, dl - file flags.
+        pushfd
+        cli
         push fs
         push eax
         mov bx, Segments.FS_Header
@@ -225,9 +248,12 @@ FlFS:
 
         pop eax
         pop fs
+        popfd
         ret
 
     .getFileNumber: ; ds:esi - file name string (zero-terminated). Output: eax - file number
+        pushfd
+        cli
         push ebx
         push ecx
         push edx
@@ -253,9 +279,6 @@ FlFS:
         push dword 0 ; file number
 
         .getFileNumber.loop:
-            cmp edx, 512*3
-            jge .getFileNumber.noFile
-
             test byte fs:[edx], 00000001b ; only check filename if file exists
             jz .getFileNumber.next
 
@@ -288,31 +311,39 @@ FlFS:
                 add edx, FileDescriptorSize     ; go to next file
 
                 cmp edx, ebx                    ; check if end reached
-                push eax
                 jge .getFileNumber.noFile
+                push eax
                 jmp .getFileNumber.loop
 
         .getFileNumber.noFile:
-            stc
-            pop eax
-            jmp .getFileNumber.end
+          stc
+          
+          SWITCH_BACK_TO_PROCESS_LDT dx
+
+          pop fs
+          pop edi
+          pop esi
+          pop edx
+          pop ecx
+          pop ebx
+          popfd
+          stc
+          ret
 
         .getFileNumber.done:
-            jcxz .getFileNumber.next
+          jcxz .getFileNumber.next
+          pop eax
+          SWITCH_BACK_TO_PROCESS_LDT dx
 
-            pop eax
-            clc
-
-        .getFileNumber.end:
-            SWITCH_BACK_TO_PROCESS_LDT dx
-
-            pop fs
-            pop edi
-            pop esi
-            pop edx
-            pop ecx
-            pop ebx
-            ret
+          pop fs
+          pop edi
+          pop esi
+          pop edx
+          pop ecx
+          pop ebx
+          popfd
+          clc
+          ret
 
     section .rodata
 

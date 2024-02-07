@@ -20,7 +20,7 @@ ProcessManager:
 		xor edi, edi
 
 		rep stosb ;[edi]
-        dec dword [es:PMDB.ammoutOfActiveProcesses] ; hiding the kernel process
+    dec dword [es:PMDB.ammoutOfActiveProcesses] ; hiding the kernel process
 
 		mov cx, Segments.UserspaceMem ; Clearing LDT lists
 		mov es, cx
@@ -240,7 +240,7 @@ ProcessManager:
         jz .stopProcess.notStarted
 
         xor [es:edi], ebx
-
+        
         call .resumeWaitingProcesses
 
         push eax
@@ -509,15 +509,29 @@ ProcessManager:
             ret
 
     .getCurrentPID: ; Output: ecx - PID
-        push eax
-        push es
+      push eax
+      push gs
 
-        mov ax, Segments.ProcessData
-		mov es, ax
+      mov ax, Segments.ProcessData
+		  mov gs, ax
 
-        mov ecx, [es:PMDB.shedulerCurrentProcessNumber]
+      mov ecx, [gs:PMDB.shedulerCurrentProcessNumber]
 
-        pop es
-        pop eax
+      pop gs
+      pop eax
 
-        ret
+      ret
+    
+    .setCurrentPID: ; ecx - ammount
+      push eax
+      push gs
+
+      mov ax, Segments.ProcessData
+		  mov gs, ax
+
+      mov [gs:PMDB.shedulerCurrentProcessNumber], ecx
+
+      pop gs
+      pop eax
+
+      ret

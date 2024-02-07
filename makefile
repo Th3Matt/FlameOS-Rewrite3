@@ -44,7 +44,7 @@ qemu: Builds/FlameOS.img
 	qemu-system-x86_64 -vga std -drive file=Builds/FlameOS.img,format=raw -s -S -D ./Logs/qemu.log -d guest_errors -d int
 
 qemuSATA: Builds/FlameOS.img
-	qemu-system-x86_64 -vga std -drive file=Builds/FlameOS.img,format=raw -drive id=disk,file=Builds/OS.bin,if=none,format=raw -device ahci,id=ahci -device ide-hd,drive=disk,bus=ahci.0
+	qemu-system-x86_64 -vga std -drive id=disk,file=Builds/FlameOS.img,if=none,format=raw -device ahci,id=ahci -device ide-hd,drive=disk,bus=ahci.0 -D ./Logs/qemu.log -d pcall,guest_errors,in_asm
 
 bochs: Builds/FlameOS.img Builds/NULL.bin
 	if test -f "Builds/FlameOS.img.lock"; then rm Builds/FlameOS.img.lock; fi

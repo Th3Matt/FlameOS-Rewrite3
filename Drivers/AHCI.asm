@@ -748,7 +748,7 @@ AHCIDriver:
 
       test eax, 1<<30 ; check for error
       stc
-      jz .waitForCommandCompletion.end
+      jnz .waitForCommandCompletion.end
 
       add esi, AHCIOffsets.Port.cmdi - AHCIOffsets.Port.is
 
@@ -758,6 +758,7 @@ AHCIDriver:
       jnz .waitForCommandCompletion.loop
 
     clc
+    
     .waitForCommandCompletion.end:
     popa
     ret
@@ -772,6 +773,7 @@ AHCIDriver:
    
     mov ecx, 0x400000
     mov eax, ebx
+    xor edx, edx
     div ecx
     mov ecx, eax
 
@@ -779,7 +781,7 @@ AHCIDriver:
 
     mov esi, ecx
 
-    jecxz .setBufferForSlot.finalWrite
+    jecxz .setBufferForSlot.finalWrite 
     
     .setBufferForSlot.loop:
       push ecx
@@ -811,6 +813,21 @@ AHCIDriver:
     pop ebx
     pop eax
 
+    ret
+
+  .clearPRDTEntries: ; edi - command slot, es - command segment.
+    pusha
+
+    xor eax, eax
+    xor ebx, ebx
+    mov ecx, 32
+
+    .clearPRDTEntries.loop:
+      call .modifyPRDTEntry
+
+      loop .clearPRDTEntries.loop
+
+    popa
     ret
 
   .modifyPRDTEntry: ; eax - buffer base, ebx - buffer size (22-bit), ecx - entry number, edi - command slot, es - command segment.
@@ -856,7 +873,9 @@ AHCIDriver:
     popa
     ret
 
-  .readSectors: ; eax - starting sector, ebx - disk #, ecx - sectors to read, fs:edi - buffer. 
+  .readSectors: ; eax - starting sector, ebx - disk #, ecx - sectors to read, fs:edi - buffer.
+    pushfd
+    cli
     pusha
 
     push eax
@@ -894,13 +913,20 @@ AHCIDriver:
     push es
     push ds
 
+    push esi
+    SWITCH_TO_SYSTEM_LDT si
+    
     mov es, ax
+    
+    SWITCH_BACK_TO_PROCESS_LDT si
+    pop esi
+
     mov eax, esi
 
     mov si, fs
     mov ds, si
 
-    call LDT.getEntryBaseAddress ; This function has the quirk of requiring the current LDT to be the one containing fs
+    call LDT.getEntryBaseAddress ; This function has the quirk of requiring the current LDT to be the one containing ds
 
     push ebx
     push ecx
@@ -911,6 +937,7 @@ AHCIDriver:
     shl ebx, 1+4+4 ; *0x200
     xor edi, edi
 
+    call .clearPRDTEntries
     call .setBufferForSlot
 
 		mov eax, ATA.CMD.READ.DMA_EXT
@@ -919,6 +946,8 @@ AHCIDriver:
     pop ecx
 
 		call .prepareATACommand
+    
+    SWITCH_TO_SYSTEM_LDT di
 
     mov di, Segments.Variables
     mov fs, di
@@ -931,6 +960,8 @@ AHCIDriver:
   
     .readSectors.pastFSGet:
     
+    SWITCH_BACK_TO_PROCESS_LDT di
+
     pop edi ; pop ebx
     mov ecx, 0
 
@@ -948,6 +979,7 @@ AHCIDriver:
 
     clc
     popa
+    popfd
     ret
 
     .readSectors.notDisk:
@@ -955,8 +987,10 @@ AHCIDriver:
       pop eax
 
     .readSectors.error:
+      
       stc
       popa
+      popfd
       ret
 
 section .rodata

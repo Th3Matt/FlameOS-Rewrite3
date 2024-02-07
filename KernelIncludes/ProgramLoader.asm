@@ -1,234 +1,256 @@
  
 ProgramLoader:
-    .load: ; eax - UserID, edx - cpu ring, ds:esi - path to file. Output: ecx - Process ID
-        push eax
-        push edx
-        push fs
-        push esi
-        push ds
+  .load: ; eax - UserID, edx - cpu ring, ds:esi - path to file. Output: ecx - Process ID
+    push eax
+    push edx
+    push fs
+    push esi
+    push ds
 
-        mov ebx, eax
-        push ebx
+    mov ebx, eax
+    push ebx
 
-        call ProcessManager.startProcess
+    call ProcessManager.startProcess
 
-        push edi
-        push edx
-        call VFS.getFileInfo
-        mov edi, edx
-        pop edx
-        jc .load.error
+    push edi
+    push edx
+    call VFS.getFileInfo
+    mov edi, edx
 
-        push edx
-        mov edx, edi
-        mov edi, ebx
-        mov ebx, 0x2
+    jc .load.error1
 
-        test dl, 100b
-        pop edx
-        pop edi
-        jz .load.error
+    mov edx, edi
+    mov edi, ebx
+    mov ebx, 0x2
 
-        mov ebx, esi
+    test dl, 100b
+    pop edx
+    pop edi
+    jz .load.error
 
-        push esi
-        push eax
+    mov ebx, esi
 
-        mov ax, Segments.UserspaceMem
-        mov ds, ax
-        mov eax, ecx
-        push ecx
-        mov ecx, ebx
+    push esi
+    push eax
 
-        call MemoryManager.memAlloc
+    mov ax, Segments.UserspaceMem
+    mov ds, ax
+    mov eax, ecx
+    push ecx
+    mov ecx, ebx
 
-        shl ebx, 4+4+3
-        ;add ebx, eax
-        pop ecx
-        ;xor edx, edx
+    call MemoryManager.memAlloc
 
-        call LDT.createEntry
+    shl ebx, 4+4+3
+    ;add ebx, eax
+    pop ecx
+    ;xor edx, edx
+
+    call LDT.createEntry
 
 		pop eax
-        mov fs, si
-        pop esi
-        xor edi, edi
+    mov fs, si
+    pop esi
+    xor edi, edi
 
-        pop ebx
-        pop ds
-        push ds
-        push ebx
+    pop ebx
+    pop ds
+    push ds
+    push ebx
 
-        push es
-        mov ax, Segments.KernelStack
-        mov es, ax
-        xor edi, edi
+    push es
+    mov ax, Segments.KernelStack
+    mov es, ax
+    xor edi, edi
 
-        call VFS.readFileForNewProcess
-        jnc .load.done
+    push ecx
+    call ProcessManager.getCurrentPID
+    mov eax, ecx
+    pop ecx
+    call ProcessManager.setCurrentPID
+    
+    call VFS.readFileForNewProcess
+    
+    pushfd
+    push ecx
+       
+    mov ecx, eax
+    call ProcessManager.setCurrentPID
+    
+    call LDT.set
 
-        pop es
-        jmp .load.error
+    pop ecx
+    popfd
 
-        .load.done:
-        xor esi, esi
-        mov si, ds
+    jnc .load.done
 
-        pop es
-        pop ebx
-        pop ds
-        pop esi
-        pop fs
-        pop edx
-        pop eax
+    pop es
+    mov ebx, 3
+    jmp .load.error
 
-        ret
+    .load.done:
+      xor esi, esi
+      mov si, ds
 
-        .load.error:
-            call ProcessManager.stopProcess
+    pop es
+    pop ebx
+    pop ds
+    pop esi
+    pop fs
+    pop edx
+    pop eax
 
-            stc
-            pop esi ; pop ebx
-            pop ds
-            pop esi
-            pop fs
-            pop edx
-            pop eax
+    ret
 
-            ret
+    .load.error1:
+      pop esi
+      pop esi
+    .load.error:
+            
+      call ProcessManager.stopProcess
 
-    .exec: ; eax - UserID, ecx - Process ID, edx - cpu ring
-        push eax
-        push ecx
-        push ds
-        push ebx
-        push edx
+      stc
+      pop esi ; pop ebx
+      pop ds
+      pop esi
+      pop fs
+      pop edx
+      pop eax
 
-        mov ax, Segments.UserspaceMem
-        mov ds, ax
-        mov eax, ecx
-        push ecx
-        mov ecx, 1
+      ret
 
-        call MemoryManager.memAlloc
+  .exec: ; eax - UserID, ecx - Process ID, edx - cpu ring
+    push eax
+    push ecx
+    push ds
+    push ebx
+    push edx
 
-        mov ebx, 0x3ff
-        pop ecx
-        xor edx, edx
+    mov ax, Segments.UserspaceMem
+    mov ds, ax
+    mov eax, ecx
+    push ecx
+    mov ecx, 1
 
-        call LDT.createEntry ; Creating SS0
+    call MemoryManager.memAlloc
 
-        or esi, 4+0
-        mov edi, esi
-        mov eax, ecx
-        push ecx
-        mov ecx, 1
+    mov ebx, 0x3ff
+    pop ecx
+    xor edx, edx
 
-        call MemoryManager.memAlloc
+    call LDT.createEntry ; Creating SS0
 
-        mov ecx, ebx
-        mov ebx, 0x3ff
-        pop ecx
-        ;xor edx, edx
-        pop edx
+    or esi, 4+0
+    mov edi, esi
+    mov eax, ecx
+    push ecx
+    mov ecx, 1
 
-        call LDT.createEntry ; Creating SS
+    call MemoryManager.memAlloc
 
-        push fs
+    mov ecx, ebx
+    mov ebx, 0x3ff
+    pop ecx
+    ;xor edx, edx
+    pop edx
 
-        mov ax, 0x0
-        mov fs, ax
+    call LDT.createEntry ; Creating SS
 
-        call LDT.set
+    push fs
 
-        mov ax, 0+4+0
-        mov ds, ax
+    mov ax, 0x0
+    mov fs, ax
 
-        push es
-        mov ax, 0x0
-        mov es, ax
+    call LDT.set
 
-        push edx
-        mov edx, [ds:0]
+    mov ax, 0+4+0
+    mov ds, ax
 
-        shl esi, 16
-        or esi, ((4+3)<<16)+0+4+3
+    push es
+    mov ax, 0x0
+    mov es, ax
 
-        mov eax, 0x400
-        mov ebx, eax
+    push edx
+    mov edx, [ds:0]
 
-        call ProcessManager.setUpTask
-        pop edx
+    shl esi, 16
+    or esi, ((4+3)<<16)+0+4+3
 
-        push ecx
+    mov eax, 0x400
+    mov ebx, eax
 
-        test dword [ds:4], 1b ; checking if program requests graphical framebuffer
-        jz .exec.continue
+    call ProcessManager.setUpTask
+    pop edx
 
-        push ds
-        mov ax, Segments.UserspaceMem
-        mov ds, ax
+    push ecx
 
-        push edx
-        mov eax, ecx
-        push ecx
-        mov ecx, (SCREEN_WIDTH*SCREEN_HEIGHT*4/0x1000)+1
+    test dword [ds:4], 1b ; checking if program requests graphical framebuffer
+    jz .exec.continue
 
-        call MemoryManager.memAlloc
+    push ds
+    mov ax, Segments.UserspaceMem
+    mov ds, ax
 
-        mov ecx, ebx
-        mov ebx, SCREEN_WIDTH*SCREEN_HEIGHT*4-1
-        ;xor edx, edx
-        pop ecx
-        pop edx
+    push edx
+    mov eax, ecx
+    push ecx
+    mov ecx, (SCREEN_WIDTH*SCREEN_HEIGHT*4/0x1000)+1
 
-        push esi
-        call LDT.createEntry ; Creating GS
+    call MemoryManager.memAlloc
 
-        call Print.addFramebuffer
+    mov ecx, ebx
+    mov ebx, SCREEN_WIDTH*SCREEN_HEIGHT*4-1
+    ;xor edx, edx
+    pop ecx
+    pop edx
 
-        mov ax, (3<<3)+4
-        mov es, ax
+    push esi
+    call LDT.createEntry ; Creating GS
 
-        or si, 11b
-        mov es:[0x5C], si
+    call Print.addFramebuffer
 
-        mov ax, Segments.Variables
-        mov es, ax
+    mov ax, (3<<3)+4
+    mov es, ax
 
-        xor eax, eax
-        mov ecx, es:[TotalPixels]
-        shr ecx, 2
+    or si, 11b
+    mov es:[0x5C], si
 
-        mov es, si
-        rep stosd
+    mov ax, Segments.Variables
+    mov es, ax
 
-        pop esi
-        pop ds
+    xor eax, eax
+    mov ecx, es:[TotalPixels]
+    shr ecx, 2
 
-        mov ax, 0x0
-        mov es, ax
+    mov es, si
+    rep stosd
 
-        .exec.continue:
+    pop esi
+    pop ds
 
-        call ProcessManager.getCurrentPID
-        call LDT.set
-        pop ecx
+    mov ax, 0x0
+    mov es, ax
 
-        pop es
+    .exec.continue:
 
-        pop fs
+    call ProcessManager.getCurrentPID
+    call LDT.set
+    pop ecx
 
-        mov bx, Segments.UserspaceMem
-        mov ds, bx
+    pop es
 
-        shl ecx, 3+4+4
-        add ecx, 5
-        or byte [ds:ecx], 00001000b ; Making the segment executable
+    pop fs
 
-        pop ebx
-        pop ds
-        pop ecx
-        pop eax
+    mov bx, Segments.UserspaceMem
+    mov ds, bx
 
-        ret
+    shl ecx, 3+4+4
+    add ecx, 5
+    or byte [ds:ecx], 00001000b ; Making the segment executable
+
+    pop ebx
+    pop ds
+    pop ecx
+    pop eax
+
+    ret

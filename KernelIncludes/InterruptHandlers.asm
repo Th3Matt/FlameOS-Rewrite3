@@ -85,7 +85,7 @@ IRQHandlers:
 
             .timerInterrupt2.return.end:
             iret
-            jmp .timerInterrupt2 ; fix for a bug with tss
+            jmp .timerInterrupt2 ; fix for an intended feature of the tss
 
         .timerInterrupt2.stopPC:             ; No more tasks to execute, check whether to restart or shut down the computer
             call Power.PS_2Restart
@@ -105,6 +105,13 @@ SetUpInterrupts:
     push ds
     mov ax, Segments.IDT
     mov ds, ax
+
+    mov eax, Breakpoints.breakpointSkip
+    mov  bh, 11101110b ; DPL 3, Interrupt Gate
+    mov ecx, 0x3 ; Breakpoint
+    mov edx, Segments.KernelCode ; Kernel code
+
+    call IDT.modEntry
 
     mov eax, Exceptions.UD
     mov  bh, 10001110b ; DPL 0, Interrupt Gate
@@ -179,6 +186,23 @@ SetUpInterrupts:
     popa
     ret
 
+ArmBreakpoint:
+    pusha
+    push es
+
+    mov ax, Segments.IDT
+    mov ds, ax
+
+    mov eax, Breakpoints.breakpoint
+    mov  bh, 11101110b ; DPL 3, Interrupt Gate
+    mov ecx, 0x3 ; Breakpoint
+    mov edx, Segments.KernelCode ; Kernel code
+
+    call IDT.modEntry
+
+    pop es
+    popa
+    ret
 
 SetUpSheduler:
     pusha
@@ -453,7 +477,6 @@ Exceptions:
         jmp $  ; TODO: Display interactive options
 
     section .rodata
-
     .Exception:   db (.Exception.2-.Exception-1)
                   db ",---EXCEPTION--------!!!"
 
@@ -473,3 +496,87 @@ Exceptions:
     .Exception.EIP: db "EIP: 0x"
 
     section .text
+
+Breakpoints:
+  .breakpoint:
+    push eax
+    xor eax, eax
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    pop eax
+
+    pusha
+
+    mov ebx, eax
+    mov eax, 0x00FFFFFF
+    xor ecx, ecx
+
+    call Print.hex32
+
+    popa
+    pusha
+
+    mov ecx, 0x00FFFFFF
+    xor eax, eax
+
+    call Print.hex32
+
+    popa
+    pusha
+
+    mov ebx, ecx
+    mov eax, 0x00FFFFFF
+    xor ecx, ecx
+
+    call Print.hex32
+
+    popa
+    pusha
+
+    mov ebx, edx
+    mov ecx, 0x00FFFFFF
+    xor eax, eax
+
+    call Print.hex32
+
+    popa
+    pusha
+
+    mov ebx, esi
+    mov eax, 0x00FFFFFF
+    xor ecx, ecx
+
+    call Print.hex32
+
+    popa
+    pusha
+
+    mov ebx, edi
+    mov ecx, 0x00FFFFFF
+    xor eax, eax
+
+    call Print.hex32
+
+    popa
+    pusha
+
+    mov ebx, esp
+    mov ecx, 0x0000FF00
+    xor eax, eax
+
+    call Print.hex32
+
+    popa
+
+    ;jmp $ 
+    
+    call Print.refresh
+
+    jmp $
+
+  .breakpointSkip:
+    iret
+
+

@@ -1,25 +1,25 @@
 
 VFS:
-    .init:
-        pusha
-        push es
-        push fs
-        push ds
+  .init:
+    pusha
+    push es
+    push fs
+    push ds
 
-        mov ax, Segments.Variables
-        mov ds, ax
+    mov ax, Segments.Variables
+    mov ds, ax
 
-        mov ecx, 1
-        xor edx, edx
-        call API.alloc
-        mov [ds:AllocSegments.VFS_Data], si
-        mov es, si
+    mov ecx, 1
+    xor edx, edx
+    call API.alloc
+    mov [ds:AllocSegments.VFS_Data], si
+    mov es, si
 
-        mov ax, Segments.FS_Header
-        mov fs, ax
+    mov ax, Segments.FS_Header
+    mov fs, ax
 
-        xor eax, eax
-        mov ecx, 0xfff/4
+    xor eax, eax
+    mov ecx, 0xfff/4
 		xor edi, edi
 
 		rep stosd
@@ -32,216 +32,212 @@ VFS:
 
 		pop ds
 		pop fs
-        pop es
-        popa
-        ret
+    pop es
+    popa
+    ret
 
-    .getFileInfo: ; ebx - UserID, ds:esi - file name string (zero-terminated). Output: ebx - file size, dl - file flags
-        push edi
-        push esi
-        push edx
-        push ecx
-        push eax
-        mov eax, esi
-        call .mountCheck
+  .getFileInfo: ; ebx - UserID, ds:esi - file name string (zero-terminated). Output: ebx - file size, dl - file flags
+    push edi
+    push esi
+    push edx
+    push ecx
+    push eax
+    mov eax, esi
+    call .mountCheck
 
-        cmp eax, esi
-        je .getFileInfo.error1
+    cmp eax, esi
+    je .getFileInfo.error1
 
-        call FlFS.getFileNumber
-        jc .getFileInfo.error1
 
-        cmp ebx, 0
-        jz .getFileInfo.skipCheck
+    call FlFS.getFileNumber
+    jc .getFileInfo.error1
 
-        call FlFS.getFileInfo
-        cmp ebx, ecx
+    cmp ebx, 0
+    jz .getFileInfo.skipCheck
 
-        jnz .getFileInfo.error2
+    call FlFS.getFileInfo
+    cmp ebx, ecx
 
-        .getFileInfo.skipCheck:
+    jnz .getFileInfo.error2
 
-        call FlFS.getFileInfo
+    .getFileInfo.skipCheck:
 
-        clc
+    call FlFS.getFileInfo
 
-        pop eax
-        pop ecx
-        pop esi ; pop edx
-        pop esi
-        pop edi
-        ret
+    clc
+
+    pop eax
+    pop ecx
+    pop esi ; pop edx
+    pop esi
+    pop edi
+    ret
 
     .getFileInfo.error1:
-        pop eax
-        pop ecx
-        pop edx
-        pop esi
-        pop edi
+      pop eax
+      pop ecx
+      pop edx
+      pop esi
+      pop edi
 
-        jmp .error1.postpop
+      jmp .error1.postpop
 
     .getFileInfo.error2:
-        pop eax
-        pop ecx
-        pop edx
-        pop esi
-        pop edi
+      pop eax
+      pop ecx
+      pop edx
+      pop esi
+      pop edi
 
-        jmp .error2.postpop
+      jmp .error2.postpop
 
-    .readFileForNewProcess: ; ebx - UserID, ecx - new PID, ds:esi - file name string (zero-terminated), fs:edi - buffer.
-        pusha
-        mov eax, esi
-        push ecx
-        call .mountCheck
-        mov edx, ecx
+  .readFileForNewProcess: ; ebx - UserID, ecx - new PID, ds:esi - file name string (zero-terminated), fs:edi - buffer.
+    pusha
+    mov eax, esi
+    push ecx
+    call .mountCheck
+    mov edx, ecx
 
-        pop ecx
-        cmp eax, esi
-        je .error1
+    pop ecx
+    cmp eax, esi
+    je .error1
 
-        call FlFS.getFileNumber
-        jc .error1
+    call FlFS.getFileNumber
+    jc .error1
 
-        call LDT.set
+    call LDT.set
 
-        mov ecx, edx
+    mov ecx, edx
 
-        cmp ebx, 0
-        jz .readFileForNewProcess.skipCheck
-        push ecx
-        push ebx
-        call FlFS.getFileInfo
-        pop ebx
-        cmp ebx, ecx
-        pop ecx
-        jnz .error2
+    cmp ebx, 0
+    jz .readFileForNewProcess.skipCheck
+    push ecx
+    push ebx
+    call FlFS.getFileInfo
+    pop ebx
+    cmp ebx, ecx
+    pop ecx
+    jnz .error2
 
-        .readFileForNewProcess.skipCheck:
+    .readFileForNewProcess.skipCheck:
 
-        push ds
-        mov bx, fs
-        mov ds, bx
+    mov bx, fs
+    mov ds, bx
 
-        call FlFS.readFile
+    call FlFS.readFile
 
-        call ProcessManager.getCurrentPID
-        call LDT.set
+    popa
+    ret
 
-        pop ds
+  .readFile: ; ebx - UserID, ds:esi - file name string (zero-terminated), fs:edi - buffer.
+    pusha
+    mov eax, esi
+    call .mountCheck
 
-        popa
-        ret
+    cmp eax, esi
+    je .error1
 
-    .readFile: ; ebx - UserID, ds:esi - file name string (zero-terminated), fs:edi - buffer.
-        pusha
-        mov eax, esi
-        call .mountCheck
+    call FlFS.getFileNumber
 
-        cmp eax, esi
-        je .error1
+    jc .error1
 
-        call FlFS.getFileNumber
+    cmp ebx, 0
+    jz .readFile.skipCheck
+    push ebx
+    call FlFS.getFileInfo
+    pop ebx
+    cmp ebx, ecx
+    jnz .error2
 
-        jc .error1
+    .readFile.skipCheck:
 
-        cmp ebx, 0
-        jz .readFile.skipCheck
-        push ebx
-        call FlFS.getFileInfo
-        pop ebx
-        cmp ebx, ecx
-        jnz .error2
+    push ds
+    mov bx, fs
+    mov ds, bx
 
-        .readFile.skipCheck:
+    call FlFS.readFile
 
-        push ds
-        mov bx, fs
-        mov ds, bx
+    pop ds
 
-        call FlFS.readFile
+    popa
+    ret
 
-        pop ds
-
-        popa
-        ret
-
-        .error1:
-            popa
-        .error1.postpop:
-            stc
-
-            push ecx
-			call ProcessManager.getCurrentPID
-			call LDT.set
+    .error1:
+      popa
+    .error1.postpop:
+      push ecx
+		  call ProcessManager.getCurrentPID
+		  call LDT.set
 			pop ecx
 
-            mov ebx, 0x00000001 ; Impossible path
-            ret
+      stc
+      mov ebx, 0x00000001 ; Impossible path
+      ret
 
-        .error2:
-            popa
-        .error2.postpop:
-            stc
+    .error2:
+      popa
+    .error2.postpop:
+      push ecx
+	    call ProcessManager.getCurrentPID
+		  call LDT.set
+	    pop ecx
 
-            push ecx
-			call ProcessManager.getCurrentPID
-			call LDT.set
-			pop ecx
+      stc
+      mov ebx, 0x00000002 ; Not permitted to access
+      ret
 
-            mov ebx, 0x00000002 ; Not permitted to access
-            ret
+  .mountCheck: ; ds:esi - file path. Output: ecx - mounted disk, esi - path from mountpoint.
+    pushfd
+    cli
+    push edx
+    push eax
+    push ebx
+    push edi
+    push fs
 
-        .mountCheck: ; ds:esi - file path. Output: ecx - mounted disk, esi - path from mountpoint.
-            push edx
-            push eax
-            push ebx
-            push edi
-            push fs
+    SWITCH_TO_SYSTEM_LDT cx
 
-            SWITCH_TO_SYSTEM_LDT cx
+    mov cx, Segments.Variables
+    mov fs, cx
 
-            mov cx, Segments.Variables
-            mov fs, cx
+    mov cx, [fs:AllocSegments.VFS_Data]
+    mov fs, cx
 
-            mov cx, [fs:AllocSegments.VFS_Data]
-            mov fs, cx
+    xor ecx, ecx
+    xor edi, edi
+    xor ebx, ebx
 
-            xor ecx, ecx
-            xor edi, edi
-            xor ebx, ebx
+    .mountCheck.loop:
+      mov dl, fs:[edi+ecx+5]     ; read char from mountpoint path
+      cmp dl, ds:[esi+ecx]       ; compare
+      jne .mountCheck.next
 
-            .mountCheck.loop:
-                mov dl, fs:[edi+ecx+5]     ; read char from mountpoint path
-                cmp dl, ds:[esi+ecx]       ; compare
-                jne .mountCheck.next
+      inc ecx
+      cmp byte fs:[edi+ecx+5], 0 ; check if mountpoint path string has ended
+      jnz .mountCheck.loop
 
-                inc ecx
-                cmp byte fs:[edi+ecx+5], 0 ; check if mountpoint path string has ended
-                jnz .mountCheck.loop
+      cmp ecx, ebx
+      jl .mountCheck.next
 
-                cmp ecx, ebx
-                jl .mountCheck.next
+      mov ebx, ecx
+      mov eax, fs:[edi+1]
 
-                mov ebx, ecx
-                mov eax, fs:[edi+1]
+    .mountCheck.next:
+      xor ecx, ecx
+      add edi, 0x20
 
-            .mountCheck.next:
-                xor ecx, ecx
-                add edi, 0x20
+      cmp edi, 0xfdf
+      jle .mountCheck.loop
 
-                cmp edi, 0xfdf
-                jle .mountCheck.loop
+    SWITCH_BACK_TO_PROCESS_LDT cx
 
-           SWITCH_BACK_TO_PROCESS_LDT cx
+    mov ecx, eax
+    add esi, ebx
 
-            mov ecx, eax
-            add esi, ebx
-
-            pop fs
-            pop edi
-            pop ebx
-            pop eax
-            pop edx
-            ret
+    pop fs
+    pop edi
+    pop ebx
+    pop eax
+    pop edx
+    popfd
+    ret

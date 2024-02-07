@@ -356,7 +356,7 @@ Terminal:
             xor ebx, ebx
             xor ecx, ecx
 
-            int 0x30 ; print file not found
+            int 0x30 ; print permision denied
 
         .enter.errorPrinted:
 

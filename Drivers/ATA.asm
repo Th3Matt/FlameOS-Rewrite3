@@ -233,8 +233,11 @@ S_ATA_PI:
 
             pop ecx
 
-            hlt
-            jmp $-1
+            ;hlt
+            ;jmp $-1
+
+            push edx
+            jmp .detectDevices.bus2Done
 
     .checkATABus: ; dx - ATA status register port, edi - Terminal printing location, ebx - Bus #
         push eax
@@ -1082,7 +1085,7 @@ S_ATA_PI:
     .ATA___Message: db .noBus1Message-.ATA___Message-1, " is an ATA disk.", 10
     .noBus1Message: db .noBus2Message-.noBus1Message-1, "(ATA:0) has no drives attached.", 10
     .noBus2Message: db .noBusOnMessage-.noBus2Message-1, "(ATA:1) has no drives attached.", 10
-    .noBusOnMessage: db .end-.noBusOnMessage-1, "Both ATA buses have no drives attached. Halting.", 10
+    .noBusOnMessage: db .end-.noBusOnMessage-1, "Both ATA buses have no drives attached.", 10
     .end:
 
     section .text

@@ -8,6 +8,7 @@ API:
         mov edx, 0x3
 
         call ProgramLoader.load
+
         jc .quickLoad.error
 
         cli
@@ -54,6 +55,7 @@ API:
         xor ebx, ebx
         mov ds, bx
         mov es, bx
+
         call ProcessManager.stopProcess
 
         call Print.delFramebuffer

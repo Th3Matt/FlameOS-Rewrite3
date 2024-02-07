@@ -267,7 +267,7 @@ MemoryManager:
 		mov es, ax
 
         pop eax
-        mov esi, [es:ALLOCATABLE_SPACE_TABLE_SIZE]
+        xor esi, esi
 
         .memFree.test:
             cmp [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE], eax
@@ -316,21 +316,22 @@ MemoryManager:
             mov dword [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+8], 0
             mov dword [es:esi+ALLOCATABLE_SPACE_TABLE_SIZE+12], 0
 
-        pop ecx
-        pop esi
-        pop eax
-        pop es
         clc
-
+        
         .memFree.end:
-            ret
+          pop ecx
+          pop esi
+          pop eax
+          pop es
+
+        ret
 
         .memFree.nextAlloc:
             add esi, 16
 
             cmp esi, (0x1000-0x200)
             stc
-            jz .memFree.end
+            jge .memFree.end
 
             jmp .memFree.test
 

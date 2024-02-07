@@ -10,8 +10,9 @@ EDDV3Read:
 	mov ax, Segments.Variables
 	mov es, ax
 
-	mov ax, ds:[0x1E]
-	cmp ax, 0xBEDD
+	mov ax, ds:[0x1E]	
+
+  cmp ax, 0xBEDD
 	jne .noEDD
 
 	mov edx, ds:[0x28]
@@ -63,80 +64,82 @@ EDDV3Read:
 		.PCI.API.notStandard:
 
 		cmp es:[ABAddr1], ax
-		jne .noEDD
-
+		jne .checkSata
 
 		mov eax, ds:[0x38]
 		and eax, 0x1
-		mov word es:[EDD_DetectedDiskNumber], ax
+		mov bx, 0x0200
+    add bx, ax
 
 		jmp .end
 
 	.notSupported.USB:
 		mov si, Segments.KernelCode
-        mov ds, si
-        mov eax, 0x00FFFFFF
-        mov esi, .USBMessage
-        xor ecx, ecx
+    mov ds, si
+    mov eax, 0x00FFFFFF
+    mov esi, .USBMessage
+    xor ecx, ecx
 
-        call Print.string
+    call Print.string
 
-        jmp $
+    jmp $
 
 	.notSupported.SCSI:
 		mov si, Segments.KernelCode
-        mov ds, si
-        mov eax, 0x00FFFFFF
-        mov esi, .SCSIMessage
-        xor ecx, ecx
+    mov ds, si
+    mov eax, 0x00FFFFFF
+    mov esi, .SCSIMessage
+    xor ecx, ecx
 
-        call Print.string
+    call Print.string
 
-        jmp $
+    jmp $
 
 
 	.notSupported.FireWire:
 		mov si, Segments.KernelCode
-        mov ds, si
-        mov eax, 0x00FFFFFF
-        mov esi, .FireWireMessage
-        xor ecx, ecx
+    mov ds, si
+    mov eax, 0x00FFFFFF
+    mov esi, .FireWireMessage
+    xor ecx, ecx
 
-        call Print.string
+    call Print.string
 
-        jmp $
+    jmp $
 
 	.notSupported.Fibre:
 		mov si, Segments.KernelCode
-        mov ds, si
-        mov eax, 0x00FFFFFF
-        mov esi, .FibreMessage
-        xor ecx, ecx
+    mov ds, si
+    mov eax, 0x00FFFFFF
+    mov esi, .FibreMessage
+    xor ecx, ecx
 
-        call Print.string
+    call Print.string
 
-        jmp $
+    jmp $
 
 	.notSupported.ATAPI:
 		mov si, Segments.KernelCode
-        mov ds, si
-        mov eax, 0x00FFFFFF
-        mov esi, .ATAPIMessage
-        xor ecx, ecx
+    mov ds, si
+    mov eax, 0x00FFFFFF
+    mov esi, .ATAPIMessage
+    xor ecx, ecx
 
-        call Print.string
+    call Print.string
 
-        jmp $
+    jmp $
 
 	.end:
-		clc
+		mov word es:[EDD_DetectedDiskNumber], bx
+		
+    clc
 		pop es
 		pop ds
 		popa
 		ret
 
 	.noEDD:
-        mov word es:[EDD_DetectedDiskNumber], 0xFFFF
+    mov word es:[EDD_DetectedDiskNumber], 0xFFFF
 
 		stc
 		pop es
@@ -146,6 +149,8 @@ EDDV3Read:
 
 	.ISA:
 		.ISA.ATA:
+      mov bx, 0x0200
+
 			mov al, es:[ADB]
 
 			test al, 00000001b
@@ -168,7 +173,7 @@ EDDV3Read:
 				test bl, 000001110b
 				jnz .noEDD
 
-				mov word es:[EDD_DetectedDiskNumber], 0
+				mov bl, 0
 
 				jmp .end
 
@@ -179,7 +184,7 @@ EDDV3Read:
 				test bl, 11100000b
 				jnz .noEDD
 
-				mov word es:[EDD_DetectedDiskNumber], 1
+				mov bl, 1
 				jmp .end
 
 			.ISA.ATA.ATABus2:
@@ -203,20 +208,35 @@ EDDV3Read:
 					test bl, 000001110b
 					jnz .noEDD
 
-					mov word es:[EDD_DetectedDiskNumber], 2
+					mov bl, 2
 
 					jmp .end
 
 				.ISA.ATA.2.disk2:
-                    test bl, 00010000b
-                    jz .noEDD
+          test bl, 00010000b
+          jz .noEDD
 
-                    test bl, 11100000b
-                    jnz .noEDD
+          test bl, 11100000b
+          jnz .noEDD
 
-					mov word es:[EDD_DetectedDiskNumber], 3
+          mov bl, 3
 					jmp .end
 
+  .checkSata:
+    mov bx, 0x0300 ; TODO: actually check
+    
+    jmp .end
+
+  .fuckingGuess: ; Output: bx - boot disk (probably).
+    push es
+    
+    mov bx, Segments.Variables
+    mov es, bx
+    mov bx, 0x0300
+    mov es:[EDD_DetectedDiskNumber], bx
+    
+    pop es
+    ret
 
 	section .rodata
 

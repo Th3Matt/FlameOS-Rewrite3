@@ -107,7 +107,6 @@ KERNEL:
 
     call SetUpInterrupts
     sti
-
     popa
 
 		mov esi, IDTloaded
@@ -156,35 +155,8 @@ KERNEL:
     jnz PCITest
 
 		call S_ATA_PI.detectDevices
+
 		call AHCIDriver.init
-
-    mov ecx, 1
-    xor edx, edx
-
-    call API.allocWithAddress
-
-    mov fs, si
-
-    mov eax, 0
-    xor ebx, ebx
-    mov ecx, 2
-    xor edi, edi 
-    
-    call AHCIDriver.readSectors
-
-    jc .readSectors
-    
-    pusha 
-   
-    mov ebx, 0x00FA1100
-    mov eax, 0x00FF8800
-    xor ecx, ecx
-
-    call Print.hex32 
-  
-    popa
-  
-    .readSectors:
 
 ; ----------------------------------------------------------------------------------------------
 ;									Disk drivers initialised
@@ -256,9 +228,16 @@ KERNEL:
 
     push ds
 
+    call ProcessManager.setCurrentPID
+
     mov ds, si
     xor edi, edi
     call FlFS.readFile
+
+    push ecx
+    mov ecx, 0
+    call ProcessManager.setCurrentPID
+    pop ecx
 
     xor eax, eax
 		mov ebx, ecx
@@ -283,6 +262,7 @@ KERNEL:
 
     call Print.newLine
 
+    call ArmBreakpoint
 		sti
 		hlt
 		jmp $-1

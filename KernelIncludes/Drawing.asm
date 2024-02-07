@@ -95,13 +95,13 @@ Print:
         ret
 
     .charAtLocation:	;eax - foreground color dword, ebx - Character #, ecx - background color dword, edx - Character location
-        push ds
+        push gs
         push edx
         push ecx
         push eax
 
         mov ax, Segments.CharmapOfScreen
-        mov ds, ax
+        mov gs, ax
 
         xchg eax, edx
 
@@ -112,30 +112,30 @@ Print:
 
         pop eax
 
-        mov ds:[edx], bl
+        mov gs:[edx], bl
         pop ecx
 
-        mov ds:[edx+1], eax
-        mov ds:[edx+5], ecx
+        mov gs:[edx+1], eax
+        mov gs:[edx+5], ecx
 
         pop edx
-        pop ds
+        pop gs
         ret
 
     .char:	;eax - foreground color dword, ebx - Character #, ecx - background color dword
-        push es
+        push gs
         push edx
         push eax
         mov ax, Segments.Variables
-        mov es, ax
+        mov gs, ax
         pop eax
 
-        mov edx, es:[TMV.NextPlaceToPrintChar]
+        mov edx, gs:[TMV.NextPlaceToPrintChar]
 
         call .charAtLocation
         inc edx
 
-        mov es:[TMV.NextPlaceToPrintChar], edx
+        mov gs:[TMV.NextPlaceToPrintChar], edx
 
         pop edx
         pop es
@@ -487,21 +487,21 @@ Print:
 			ret
 
     .dec32:          ; eax - color dword, ebx - dword to print, ecx - bg color dword
-        push es
+        push gs
         push edx
         push eax
         mov ax, Segments.Variables
-        mov es, ax
+        mov gs, ax
         pop eax
 
-        mov edx, es:[TMV.NextPlaceToPrintChar]
+        mov edx, gs:[TMV.NextPlaceToPrintChar]
 
         call .dec32AtLocation
 
-        mov es:[TMV.NextPlaceToPrintChar], edx
+        mov gs:[TMV.NextPlaceToPrintChar], edx
 
         pop edx
-        pop es
+        pop gs
         ret
 
 
@@ -638,21 +638,21 @@ Print:
         ret
 
     .hex32:             ; eax - color dword, ebx - dword to print, ecx - bg color dword
-        push es
+        push gs
         push edx
         push eax
         mov ax, Segments.Variables
-        mov es, ax
+        mov gs, ax
         pop eax
 
-        mov edx, es:[TMV.NextPlaceToPrintChar]
+        mov edx, gs:[TMV.NextPlaceToPrintChar]
 
         call .hex32AtLocation
 
-        mov es:[TMV.NextPlaceToPrintChar], edx
+        mov gs:[TMV.NextPlaceToPrintChar], edx
 
         pop edx
-        pop es
+        pop gs
         ret
 
     .hex32_Syscall:				; eax - color dword, edx - dword to print, ecx - bg color dword
