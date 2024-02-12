@@ -106,6 +106,13 @@ SetUpInterrupts:
     mov ax, Segments.IDT
     mov ds, ax
 
+    mov eax, Exceptions.DE
+    mov  bh, 11101110b ; DPL 3, Interrupt Gate
+    mov ecx, 0x1 ; Divide error
+    mov edx, Segments.KernelCode ; Kernel code
+
+    call IDT.modEntry
+
     mov eax, Breakpoints.breakpointSkip
     mov  bh, 11101110b ; DPL 3, Interrupt Gate
     mov ecx, 0x3 ; Breakpoint
@@ -237,6 +244,9 @@ SetUpSheduler:
     ret
 
 Exceptions:
+    .DE:
+        push dword "D"+("E"<<16)
+        call .panicScreen
     .UD:
         push dword "U"+("D"<<16)
         call .panicScreen
@@ -571,7 +581,7 @@ Breakpoints:
     popa
 
     ;jmp $ 
-    
+    mov ebx, 0xFFFFFFFF
     call Print.refresh
 
     jmp $

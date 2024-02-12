@@ -20,6 +20,9 @@ Syscall:
         mov dword es:[(0x5<<2)+4],  Draw.writeChar
         mov dword es:[(0x6<<2)+4],  Draw.writeStr
         mov dword es:[(0x7<<2)+4],  Print.hex32_Syscall
+        mov dword es:[(0x8<<2)+4],  Print.dec32_Syscall
+        mov dword es:[(0x9<<2)+4],  Draw.writeHex32
+        mov dword es:[(0xA<<2)+4],  Draw.writeDec32
         mov dword es:[(0x20<<2)+4], API.yield
         mov dword es:[(0x21<<2)+4], API.quickLoad
         mov dword es:[(0x22<<2)+4], API.processExit

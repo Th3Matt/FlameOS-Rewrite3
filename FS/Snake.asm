@@ -4,7 +4,7 @@
 
 INFO:
 	.Entrypoint: 	dd Snake
-	.Flags:         dd 00000000000000000000000000000001b
+	.Flags:       dd 00000000000000000000000000000001b
 
 times 512-($-$$) db 0
 
@@ -18,27 +18,32 @@ Vars.snakeLength equ 11
 Vars.TailX equ 13
 Vars.TailY equ 14
 Vars.Score equ 15
-Vars.directionList equ 19
+Vars.FoodX equ 19
+Vars.FoodY equ 20
+Vars.directionList equ 21
 
-StartX equ 24
-StartY equ 25
-StartSize equ 9
-MaxDirectionListSize equ 0x73B
+%define StartX 24
+%define StartY 25
+%define StartSize 9
+%define MaxDirectionListSize 0x73B
 
-XMin equ 0
-YMin equ 4
-XMax equ 49
-YMax equ 36
+%define XMin 0
+%define YMin 4
+%define XMax SCREEN_WIDTH/16-1  ;49
+%define YMax SCREEN_HEIGHT/16-1 ;36
 
-SnakeColor equ 0x00BB8800
-FoodColor equ 0x00BBBB00
-BackgroundColor equ 0x00008800
-MenuBackgroundColor equ BackgroundColor+Brighten
+%define TargetFramerate 25
+%xdefine LoopDelay (1/50/TargetFramerate) 
 
-Brighten equ 0x00777777
+%define SnakeColor 0x00BB8800
+%define FoodColor 0x00BBBB00
+%define BackgroundColor 0x00008800
+%define MenuBackgroundColor BackgroundColor+Brighten
 
-SCREEN_WIDTH  equ 800
-SCREEN_HEIGHT equ 600
+%define Brighten 0x00777777
+
+%define SCREEN_WIDTH  800
+%define SCREEN_HEIGHT 600
 
 Snake:
 	push cs
@@ -55,123 +60,134 @@ Snake:
 	mov es, si
 
 	mov ecx, 1
-    mov ebx, 0x30
-    int 0x30
-    mov fs, si
+  mov ebx, 0x30
+  int 0x30
+  mov fs, si
 
-    .mainMenu:
+  .mainMenu:
+  	push es
+  	mov bx, gs
+	  mov es, bx
 
-	push es
-	mov bx, gs
-	mov es, bx
+  	mov ecx, SCREEN_WIDTH*SCREEN_HEIGHT
+    mov eax, MenuBackgroundColor
+  	xor edi, edi
+	  rep stosd
 
-	mov ecx, SCREEN_WIDTH*SCREEN_HEIGHT
-  mov eax, MenuBackgroundColor
-	xor edi, edi
-	rep stosd
+  	pop es
 
-	pop es
+	  xor eax, eax
+  	mov ecx, eax
+  	mov edi, (SCREEN_WIDTH*4/2)+(SCREEN_WIDTH*(SCREEN_HEIGHT-5*2)*4/2)-(5*2*(Str.end-Str)*4/2)
+  	not eax
+  	mov esi, Str+1
+  	xor edx, edx
+  	mov dl, ds:[esi-1]
+  	mov ebx, 6
 
-	xor eax, eax
-	mov ecx, eax
-	mov edi, (SCREEN_WIDTH*4/2)+(SCREEN_WIDTH*(SCREEN_HEIGHT-5*2)*4/2)-(5*2*(Str.end-Str)*4/2)
-	not eax
-	mov esi, Str+1
-	xor edx, edx
-	mov dl, ds:[esi-1]
-	mov ebx, 6
+  	int 0x30 ; Print line 1
 
-	int 0x30 ; Print line 1
+  	mov edi, (SCREEN_WIDTH*4/2)+(SCREEN_WIDTH*4*(SCREEN_HEIGHT-5*2)/2)+(SCREEN_WIDTH*4*5*2)-(5*2*(Str2.end-Str2)*4/2)
+  	mov esi, Str2+1
+  	xor edx, edx
+  	mov dl, ds:[esi-1]
 
-	mov edi, (SCREEN_WIDTH*4/2)+(SCREEN_WIDTH*4*(SCREEN_HEIGHT-5*2)/2)+(SCREEN_WIDTH*4*5*2)-(5*2*(Str2.end-Str2)*4/2)
-	mov esi, Str2+1
-	xor edx, edx
-	mov dl, ds:[esi-1]
+  	int 0x30 ; Print line 2
 
-	int 0x30 ; Print line 2
+	  mov edi, (SCREEN_WIDTH*4/2)+(SCREEN_WIDTH*4*(SCREEN_HEIGHT-5*2)/2)+(SCREEN_WIDTH*4*5*2*2)-(5*2*(Str3.end-Str3)*4/2)
+  	mov esi, Str3+1
+  	xor edx, edx
+  	mov dl, ds:[esi-1]
 
-	mov edi, (SCREEN_WIDTH*4/2)+(SCREEN_WIDTH*4*(SCREEN_HEIGHT-5*2)/2)+(SCREEN_WIDTH*4*5*2*2)-(5*2*(Str3.end-Str3)*4/2)
-	mov esi, Str3+1
-	xor edx, edx
-	mov dl, ds:[esi-1]
+	  int 0x30 ; Print line 2
 
-	int 0x30 ; Print line 2
+	  .mainMenu.loop:
+      mov ebx, 0x20
+      int 0x30
 
-	.mainMenu.loop:
-        mov ebx, 0x20
-        int 0x30
+      mov ebx, 0x10
+      int 0x30
+      cmp eax, 0x0
+      jz .mainMenu.loop
 
-        mov ebx, 0x10
-        int 0x30
-        cmp eax, 0x0
-        jz .mainMenu.loop
+      cmp eax, 0x15 ; Q
+      jz .quit
 
-        cmp eax, 0x15 ; Q
-        jz .quit
+      cmp eax, 0x29 ; Space
+      jz .start
 
-        cmp eax, 0x29 ; Space
-        jz .start
-
-        jmp .mainMenu.loop
+      jmp .mainMenu.loop
 
     .mainMenu.fromGame:
-        mov ebx, 0x20
-        int 0x30
+      mov ebx, 0x20
+      int 0x30
 
-		mov ebx, 0x10
-        int 0x30
-        cmp eax, 0xF0 ; wait for q to be released
-        jnz .mainMenu.fromGame
+	    mov ebx, 0x10
+      int 0x30
+      cmp eax, 0xF0 ; wait for q to be released
+      jnz .mainMenu.fromGame
 
-        mov ebx, 0x10
-        int 0x30
+      mov ebx, 0x10
+      int 0x30
 
-        jmp .mainMenu
+      push es
+      
+      mov bx, fs
+      mov es, bx
+      xor edi, edi
+      mov ecx, 0xFFF
+      xor eax, eax
+
+      rep stosd
+
+      pop es
+
+      jmp .mainMenu
 
     .error1:
-		push es
-		mov bx, gs
-		mov es, bx
+		  push es
+		  mov bx, gs
+		  mov es, bx
 
-		xor edi, edi
-		mov ecx, SCREEN_WIDTH*SCREEN_HEIGHT
-		xor eax, eax
-		rep stosd
+		  xor edi, edi
+		  mov ecx, SCREEN_WIDTH*SCREEN_HEIGHT
+		  xor eax, eax
+		  rep stosd
 
-		push es
+		  push es
 
-		xor eax, eax
-		mov ecx, eax
-		xor edi, edi
-		not eax
-		mov esi, ErrorStr+1
-		xor edx, edx
-		mov dl, ds:[esi-1]
-		mov ebx, 6
+		  xor eax, eax
+		  mov ecx, eax
+		  xor edi, edi
+		  not eax
+		  mov esi, ErrorStr+1
+		  xor edx, edx
+		  mov dl, ds:[esi-1]
+		  mov ebx, 6
 
-		int 0x30
+		  int 0x30
 
-		.error1.wait:
-			mov ebx, 0x20
-			int 0x30
+		  .error1.wait:
+			  mov ebx, 0x20
+			  int 0x30
 
-			mov ebx, 0x20
-			int 0x30
+			  mov ebx, 0x20
+			  int 0x30
 
-			mov ebx, 0x10
-			int 0x30
-			cmp eax, 0x0
-			jz .error1.wait
+			  mov ebx, 0x10
+			  int 0x30
+			  cmp eax, 0x0
+			  jz .error1.wait
 
-			cmp eax, 0x15 ; Q
-			jz .quit
+			  cmp eax, 0x15 ; Q
+			  jz .quit
 
-			jmp .error1.wait
-		xor edi, edi
+			  jmp .error1.wait
 
 	.quit:
-        mov ebx, 0x22
-        int 0x30
+    xor edi, edi
+    mov ebx, 0x22
+    int 0x30
 
 	.start:
 		push es
@@ -206,7 +222,7 @@ Snake:
 		mov ebx, 0x40
 		int 0x30
 
-		add eax, 4
+		add eax, LoopDelay
 		mov fs:[Vars.lastClockRecord], eax
 
 	.loop:
@@ -220,9 +236,9 @@ Snake:
 		  mov ebx, fs:[Vars.lastClockRecord]
 
 		  cmp eax, ebx
-		  jz .loop.wait
+		  jle .loop.wait
 
-		  add eax, 4
+		  add eax, LoopDelay
 		  mov fs:[Vars.lastClockRecord], eax
 
     call MainLoop.drawPreviousBodySegment
@@ -231,6 +247,9 @@ Snake:
     call MainLoop.dealWithTail
     call MainLoop.storeCurrentDirection
     call MainLoop.registerInput
+    call MainLoop.spawnFood
+    call MainLoop.drawFood
+    call MainLoop.drawScore
 
 		jmp .loop
 
@@ -294,6 +313,17 @@ MainLoop:
 			jmp .dealWithHead.coord.done
 
 		.dealWithHead.coord.done:
+
+    mov ax, fs:[Vars.FoodX]
+    cmp fs:[Vars.X], ax ; check both coords at the same time
+    jne .dealWithHead.end
+
+    mov byte fs:[Vars.FoodX], 0
+    mov byte fs:[Vars.FoodY], 0
+    inc word fs:[Vars.snakeLength]
+    add dword fs:[Vars.Score], 200
+
+    .dealWithHead.end:
     
     popa
     ret
@@ -458,6 +488,7 @@ MainLoop:
     ret
 
   .registerInput:
+    pusha
 		mov ebx, 0x10
 		int 0x30
 		cmp eax, 0x0
@@ -468,7 +499,9 @@ MainLoop:
 
 		cmp eax, 0x1D ; W
 		jnz .registerInput.notUp
-
+    
+    cmp fs:[Vars.direction], byte 2
+    je .registerInput.end
 		mov fs:[Vars.direction], byte 0
 		jmp .registerInput.end
 
@@ -477,7 +510,10 @@ MainLoop:
 		cmp eax, 0x1C ; A
 		jnz .registerInput.notLeft
 
-		mov fs:[Vars.direction], byte 1
+    cmp fs:[Vars.direction], byte 3
+    je .registerInput.end
+		
+    mov fs:[Vars.direction], byte 1
 		jmp .registerInput.end
 
 		.registerInput.notLeft:
@@ -485,6 +521,8 @@ MainLoop:
 		cmp eax, 0x1B ; S
 		jnz .registerInput.notDown
 
+    cmp fs:[Vars.direction], byte 0
+    je .registerInput.end
 		mov fs:[Vars.direction], byte 2
 		jmp .registerInput.end
 
@@ -493,16 +531,92 @@ MainLoop:
 		cmp eax, 0x23 ; D
 		jnz .registerInput.end
 
+    cmp fs:[Vars.direction], byte 1
+    je .registerInput.end
 		mov fs:[Vars.direction], byte 3
 		jmp .registerInput.end 
 		
     .registerInput.end:
     
+    popa
     ret
 
     .registerInput.quit:
+      popa
       pop eax ; clean up stack
       jmp Snake.mainMenu.fromGame
+
+  .spawnFood:
+    pusha
+
+    cmp word fs:[Vars.FoodX], 0
+    jnz .spawnFood.end
+
+    mov ebx, 0x50
+    int 0x30
+
+    push eax
+
+    xor edx, edx
+    mov ecx, XMax-XMin-1
+    div ecx
+
+    add edx, XMin
+    mov fs:[Vars.FoodX], dl
+
+    pop eax
+
+    xor edx, edx
+    mov ecx, YMax-YMin-1
+    div ecx
+
+    add edx, YMin
+    mov fs:[Vars.FoodY], dl
+
+    .spawnFood.end:
+    popa
+    ret
+
+  .drawFood:
+    pusha
+     
+    cmp word fs:[Vars.FoodX], 0
+    jz .drawFood.end
+
+    mov esi, 16
+		mov edx, FoodColor
+		mov ebx, BackgroundColor
+
+		movzx di, byte fs:[Vars.FoodY]
+		shl edi, 16
+		movzx di, byte fs:[Vars.FoodX]
+
+		call DrawInTiles 
+   
+    .drawFood.end:
+      popa
+      ret
+
+  .drawScore:
+    pusha
+
+    xor eax, eax
+  	mov ecx, MenuBackgroundColor
+  	mov edi, (SCREEN_WIDTH*4/2)-(5*2*(ScoreStr.end-ScoreStr)*4/2)+(SCREEN_WIDTH*4*10)
+  	mov esi, ScoreStr+1
+  	xor edx, edx
+  	mov dl, ds:[esi-1]
+  	mov ebx, 6
+
+  	int 0x30 ; Print line 1
+    
+    mov edx, fs:[Vars.Score]
+    mov ebx, 0xA
+
+    int 0x30
+
+    popa
+    ret
 
 
 TurnTable:
@@ -634,16 +748,18 @@ DrawBlock:
 	pop edi
 	ret
 
-Str: db .end-Str-1, "Snake v0.0.2"
+Str: db .end-$-1, "Snake v0.0.2"
 	.end:
-Str2: db .end-Str2-1, "Press Space to start, q to quit"
+Str2: db .end-$-1, "Press Space to start, q to quit"
 	.end:
-Str3: db .end-Str3-1, "WASD to move."
+Str3: db .end-$-1, "WASD to move."
 	.end:
-ErrorStr: db .end-ErrorStr-1, "Error: data file missing."
+ErrorStr: db .end-$-1, "Error: data file missing."
 	.end:
+ScoreStr: db .end-$-1, "Score: " 
+  .end:
 
 File: db "/SnakeData.dat", 0
 
 
-times 512*3-($-Snake) db 0
+times 512*4-($-Snake) db 0
