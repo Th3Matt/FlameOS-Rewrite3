@@ -32,8 +32,8 @@ Vars.directionList equ 21
 %define XMax SCREEN_WIDTH/16-1  ;49
 %define YMax SCREEN_HEIGHT/16-1 ;36
 
-%define TargetFramerate 25
-%xdefine LoopDelay (1/50/TargetFramerate) 
+%define TargetFramerate 15
+%xdefine LoopDelay (1/50/TargetFramerate)
 
 %define SnakeColor 0x00BB8800
 %define FoodColor 0x00BBBB00
@@ -66,6 +66,15 @@ Snake:
 
   .mainMenu:
   	push es
+ 
+    mov bx, fs
+    mov es, bx
+    xor edi, edi
+    mov ecx, 0xFFF
+    xor eax, eax
+
+    rep stosd
+
   	mov bx, gs
 	  mov es, bx
 
@@ -129,18 +138,6 @@ Snake:
 
       mov ebx, 0x10
       int 0x30
-
-      push es
-      
-      mov bx, fs
-      mov es, bx
-      xor edi, edi
-      mov ecx, 0xFFF
-      xor eax, eax
-
-      rep stosd
-
-      pop es
 
       jmp .mainMenu
 
@@ -244,6 +241,7 @@ Snake:
     call MainLoop.drawPreviousBodySegment
     call MainLoop.dealWithHead
     call MainLoop.drawHead
+    call MainLoop.checkForSegments
     call MainLoop.dealWithTail
     call MainLoop.storeCurrentDirection
     call MainLoop.registerInput
@@ -286,13 +284,15 @@ MainLoop:
 		jnz .dealWithHead.coordSub.X
 		.dealWithHead.coordSub.Y:
 			cmp byte fs:[Vars.Y], YMin
-			jle .dealWithHead.coord.done
-			dec byte fs:[Vars.Y]
+			;jle .dealWithHead.coord.done
+			jle .drawGameOver   
+      dec byte fs:[Vars.Y]
 			jmp .dealWithHead.coord.done
 
 		.dealWithHead.coordSub.X:
 			cmp byte fs:[Vars.X], XMin
-			jle .dealWithHead.coord.done
+			;jle .dealWithHead.coord.done
+			jle .drawGameOver   
 			dec byte fs:[Vars.X]
 			jmp .dealWithHead.coord.done
 
@@ -302,13 +302,15 @@ MainLoop:
 		jnz .dealWithHead.coordAdd.X
 		.dealWithHead.coordAdd.Y:
 			cmp byte fs:[Vars.Y], YMax
-			jge .dealWithHead.coord.done
+			;jge .dealWithHead.coord.done
+      jge .drawGameOver   
 			inc byte fs:[Vars.Y]
 			jmp .dealWithHead.coord.done
 
 		.dealWithHead.coordAdd.X:
 			cmp byte fs:[Vars.X], XMax
-			jge .dealWithHead.coord.done
+			;jge .dealWithHead.coord.done
+      jge .drawGameOver   
 			inc byte fs:[Vars.X]
 			jmp .dealWithHead.coord.done
 
@@ -543,7 +545,6 @@ MainLoop:
 
     .registerInput.quit:
       popa
-      pop eax ; clean up stack
       jmp Snake.mainMenu.fromGame
 
   .spawnFood:
@@ -608,12 +609,118 @@ MainLoop:
   	mov dl, ds:[esi-1]
   	mov ebx, 6
 
-  	int 0x30 ; Print line 1
+  	int 0x30
     
     mov edx, fs:[Vars.Score]
     mov ebx, 0xA
 
     int 0x30
+
+    popa
+    ret
+
+  .drawGameOver:
+    popa
+    xor eax, eax
+    not eax
+  	mov ecx, 0x00880000
+  	mov edi, (SCREEN_WIDTH*4/2)-(5*2*(GameOverStr.end-GameOverStr)*4/2)+(SCREEN_WIDTH*4*(SCREEN_HEIGHT)/2)
+  	mov esi, GameOverStr+1
+  	xor edx, edx
+  	mov dl, ds:[esi-1]
+  	mov ebx, 6
+
+  	int 0x30
+
+    mov ebx, 0x40
+    int 0x30
+
+    mov edx, eax
+    add edx, 50
+
+    .drawGameOver.wait:
+      mov ebx, 0x20
+      int 0x30
+
+		  mov ebx, 0x40
+		  int 0x30 ; get clock tick value
+
+		  cmp eax, edx
+		  jle .drawGameOver.wait
+
+    jmp Snake.mainMenu
+
+  .checkForSegments:
+    pusha
+
+    xor esi, esi
+    mov si, fs:[Vars.directionListReadPtr]
+    mov al, fs:[Vars.X]
+    mov ah, fs:[Vars.Y]
+    mov bl, fs:[Vars.TailX]
+    mov bh, fs:[Vars.TailY]
+
+    cmp ax, bx
+    je .drawGameOver
+
+    cmp si, fs:[Vars.directionListWritePtr]
+    je .checkForSegments.done
+
+    .checkForSegments.loop:
+      mov cl, fs:[esi+Vars.directionList]
+      inc si
+
+      test cl, 00000010b
+      jnz .checkForSegments.loop.add
+      .checkForSegments.loop.sub:
+        .checkForSegments.loop.subY:
+          cmp cl, 0
+          jne .checkForSegments.loop.subX
+
+          dec bh
+
+          jmp .checkForSegments.loop.check
+
+        .checkForSegments.loop.subX:
+          cmp cl, 1
+          jne .checkForSegments.loop.check
+
+          dec bl
+
+          jmp .checkForSegments.loop.check
+      .checkForSegments.loop.add:
+        .checkForSegments.loop.addY:
+          cmp cl, 2
+          jne .checkForSegments.loop.addX
+
+          inc bh
+
+          jmp .checkForSegments.loop.check
+
+        .checkForSegments.loop.addX:
+          cmp cl, 3
+          jne .checkForSegments.loop.check
+
+          inc bl
+
+          jmp .checkForSegments.loop.check
+
+      .checkForSegments.loop.check:
+
+      cmp si, MaxDirectionListSize
+      jng .checkForSegments.loop.check.1
+
+      xor esi, esi
+      
+      .checkForSegments.loop.check.1:
+
+      cmp ax, bx
+      je .drawGameOver
+
+      cmp si, fs:[Vars.directionListWritePtr]
+      jne .checkForSegments.loop
+
+    .checkForSegments.done:
 
     popa
     ret
@@ -748,7 +855,7 @@ DrawBlock:
 	pop edi
 	ret
 
-Str: db .end-$-1, "Snake v0.0.2"
+Str: db .end-$-1, "Snake v0.1.0"
 	.end:
 Str2: db .end-$-1, "Press Space to start, q to quit"
 	.end:
@@ -757,6 +864,8 @@ Str3: db .end-$-1, "WASD to move."
 ErrorStr: db .end-$-1, "Error: data file missing."
 	.end:
 ScoreStr: db .end-$-1, "Score: " 
+  .end:
+GameOverStr: db .end-$-1, "GAME OVER" 
   .end:
 
 File: db "/SnakeData.dat", 0
